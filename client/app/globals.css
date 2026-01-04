@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+    --color-bgPrimary: #0d0c0c;
+    --color-bgSecondary: #1f1d1d;
+    --color-bgTertiary: #727572;
+    --color-textPrimary: #f5f2f2;
+    --color-textSecondary: #ded9d9;
+    --color-textTertiary: #b8b2b2;
+
+    --color-success: #0ef20a;
+    --color-error: #f20a0a;
+}
+
+@layer components {
+    .f-c-row {
+        @apply flex justify-center items-center;
+    }
+    .f-c-col {
+        @apply flex flex-col justify-center items-center;
+    }
+}
