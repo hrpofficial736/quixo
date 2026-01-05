@@ -1,5 +1,12 @@
+"use client";
+
 import Window from "@/components/Window";
-import QRCode from "react-qr-code";
+import { useState } from "react";
+import ConnectionOptions from "./ConnectionOptions";
+import DeviceNamePrompt from "./DeviceNamePrompt";
+import getRedirectUrl from "@/lib/redirectUrlHelper";
+import useSocket from "@/hooks/useSocket";
+import toast from "react-hot-toast";
 
 export default function ConnectionWindow({
   isOpen,
@@ -8,6 +15,36 @@ export default function ConnectionWindow({
   isOpen: boolean;
   onTrigger: () => void;
 }) {
+  const [proceedToConnectionOptions, setProceedToConnectionOptions] =
+    useState<boolean>(false);
+  const [redirectUrl, setRedirectUrl] = useState<string>("");
+
+  const { getSocket, emitEvent } = useSocket();
+
+  const sendReadyToPairDeviceEventToSignalingServer = (data: object) => {
+    const socket = getSocket();
+    emitEvent(
+      socket,
+      "ready_to_pair",
+      data,
+      (success: boolean, message: string) => {
+        if (success) {
+          toast.success(message);
+        } else toast.error(message);
+      },
+    );
+  };
+  const handleNameSubmit = (name: string) => {
+    const { url, pairingId } = getRedirectUrl(name);
+    setRedirectUrl(url);
+    sendReadyToPairDeviceEventToSignalingServer({
+      deviceName: name,
+      redirectUrl: url,
+      status: "WAITING",
+      pairingId,
+    });
+    setProceedToConnectionOptions(true);
+  };
   return (
     <>
       {isOpen && (
@@ -16,40 +53,11 @@ export default function ConnectionWindow({
           header="Connect"
           extraClass="w-[80%] h-[600px]"
         >
-          <div className="flex justify-between mt-10 w-full h-[80%]">
-            {/*QR and code display*/}
-            <div className="f-c-col gap-5 p-4">
-              <h1 className="text-textTertiary text-lg font-semibold">
-                Scan this QR code
-              </h1>
-              <QRCode
-                value="Harshit"
-                className="p-4 w-fit bg-white rounded-[20px]"
-              />
-
-              <div className="text-bgTertiary">or</div>
-
-              <h1 className="text-textTertiary text-[14px] font-semibold">
-                Enter this code manually in other device
-              </h1>
-              <div className="text-3xl font-bold text-textSecondary tracking-widest">
-                736786
-              </div>
-            </div>
-
-            <div className="h-full w-0.5 bg-white/5" />
-
-            <div className="f-c-col gap-5 p-4">
-              <h1 className="text-textTertiary text-lg font-semibold">
-                Enter a code
-              </h1>
-              <input
-                type="text"
-                className="bg-white/5 rounded-[15px] focus:outline-none p-3 text-textPrimary"
-                placeholder="Enter the code"
-              />
-            </div>
-          </div>
+          {proceedToConnectionOptions ? (
+            <ConnectionOptions url={redirectUrl} />
+          ) : (
+            <DeviceNamePrompt onSubmit={handleNameSubmit} />
+          )}
         </Window>
       )}
     </>

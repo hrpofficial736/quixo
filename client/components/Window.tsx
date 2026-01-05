@@ -13,7 +13,7 @@ export default function Window({
 }) {
   return (
     <div
-      className={`bg-bgSecondary rounded-2xl px-5 py-3 ${extraClass} z-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2`}
+      className={`bg-bgSecondary rounded-2xl px-5 py-3 max-w-200 ${extraClass} z-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2`}
     >
       <div className="flex items-center justify-between w-full">
         <div className="text-2xl text-textTertiary font-semibold">{header}</div>
