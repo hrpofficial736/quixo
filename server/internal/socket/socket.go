@@ -11,12 +11,12 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(req *http.Request) bool { return true },
 }
 
+var rooms *map[string][]Client = &map[string][]Client{}
+
 func WebsocketHandler(res http.ResponseWriter, req *http.Request) {
 	conn, err := upgrader.Upgrade(res, req, nil)
 	if err != nil {
 		log.Println("Error upgrading the connection...")
-		log.Println(err)
-		log.Fatal()
 		return
 	}
 
@@ -25,16 +25,19 @@ func WebsocketHandler(res http.ResponseWriter, req *http.Request) {
 	log.Println("Client connected!")
 
 	for {
-		msgType, msg, err := conn.ReadMessage()
+		var msg SocketRequest
+
+		err := conn.ReadJSON(&msg)
 		if err != nil {
-			log.Println("Error reading the message...")
+			log.Println("Error reading the message...", err)
 			return
 		}
-		log.Printf("Message received: %s\n", msg)
 
-		err = conn.WriteMessage(msgType, msg)
+		res, err := decider(msg, conn)
+
+		err = conn.WriteJSON(res)
 		if err != nil {
-			log.Println("Error writing the message...")
+			log.Println("Error writing the message...", err)
 			return
 		}
 	}

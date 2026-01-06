@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
+import { SocketProvider } from "@/context/SocketContext";
 
 export const metadata: Metadata = {
   title: "Quixo",
@@ -15,8 +16,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`antialiased`}>
-        <Toaster />
-        {children}
+        <SocketProvider>
+          <Toaster
+            toastOptions={{
+              style: {
+                backgroundColor: "black",
+                color: "white",
+              },
+            }}
+          />
+          {children}
+        </SocketProvider>
       </body>
     </html>
   );

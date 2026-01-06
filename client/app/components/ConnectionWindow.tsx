@@ -6,34 +6,29 @@ import ConnectionOptions from "./ConnectionOptions";
 import DeviceNamePrompt from "./DeviceNamePrompt";
 import getRedirectUrl from "@/lib/redirectUrlHelper";
 import useSocket from "@/hooks/useSocket";
+import { useAppSocket } from "@/context/SocketContext";
 import toast from "react-hot-toast";
 
 export default function ConnectionWindow({
   isOpen,
-  onTrigger,
+  onCloseAction,
 }: {
   isOpen: boolean;
-  onTrigger: () => void;
+  onCloseAction: () => void;
 }) {
   const [proceedToConnectionOptions, setProceedToConnectionOptions] =
     useState<boolean>(false);
+
   const [redirectUrl, setRedirectUrl] = useState<string>("");
 
-  const { getSocket, emitEvent } = useSocket();
+  const { emitEvent, listenEvent } = useSocket();
+
+  const socket = useAppSocket();
 
   const sendReadyToPairDeviceEventToSignalingServer = (data: object) => {
-    const socket = getSocket();
-    emitEvent(
-      socket,
-      "ready_to_pair",
-      data,
-      (success: boolean, message: string) => {
-        if (success) {
-          toast.success(message);
-        } else toast.error(message);
-      },
-    );
+    emitEvent(socket!, "ready_to_pair", data);
   };
+
   const handleNameSubmit = (name: string) => {
     const { url, pairingId } = getRedirectUrl(name);
     setRedirectUrl(url);
@@ -43,13 +38,23 @@ export default function ConnectionWindow({
       status: "WAITING",
       pairingId,
     });
-    setProceedToConnectionOptions(true);
+    listenEvent(socket!, (params) => {
+      if (params.eventName === "ready_to_pair") {
+        if (params.success) {
+          toast.success("Your device is ready to be paired.");
+          setProceedToConnectionOptions(true);
+          return;
+        }
+        toast.error("Error pairing your device, please try again");
+      }
+    });
   };
+
   return (
     <>
       {isOpen && (
         <Window
-          onClose={onTrigger}
+          onClose={onCloseAction}
           header="Connect"
           extraClass="w-[80%] h-[600px]"
         >
