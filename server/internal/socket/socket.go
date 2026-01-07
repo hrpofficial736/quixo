@@ -33,12 +33,6 @@ func WebsocketHandler(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		res, err := decider(msg, conn)
-
-		err = conn.WriteJSON(res)
-		if err != nil {
-			log.Println("Error writing the message...", err)
-			return
-		}
+		decider(msg, conn)
 	}
 }

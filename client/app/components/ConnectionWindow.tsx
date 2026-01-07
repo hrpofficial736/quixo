@@ -5,7 +5,7 @@ import { useState } from "react";
 import ConnectionOptions from "./ConnectionOptions";
 import DeviceNamePrompt from "./DeviceNamePrompt";
 import getRedirectUrl from "@/lib/redirectUrlHelper";
-import useSocket from "@/hooks/useSocket";
+import socketManager from "@/services/socketManager";
 import { useAppSocket } from "@/context/SocketContext";
 import toast from "react-hot-toast";
 
@@ -21,7 +21,7 @@ export default function ConnectionWindow({
 
   const [redirectUrl, setRedirectUrl] = useState<string>("");
 
-  const { emitEvent, listenEvent } = useSocket();
+  const { emitEvent, listenEvent } = socketManager();
 
   const socket = useAppSocket();
 
@@ -46,6 +46,11 @@ export default function ConnectionWindow({
           return;
         }
         toast.error("Error pairing your device, please try again");
+      }
+    });
+
+    listenEvent(socket!, (params) => {
+      if (params.eventName === "request_to_pair") {
       }
     });
   };

@@ -1,3 +1,5 @@
+import Window from "@/components/Window";
+
 export default function TransferWindow({
   isOpen,
   onClose,
@@ -5,13 +7,5 @@ export default function TransferWindow({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  return (
-    <>
-      {isOpen && (
-        <div>
-          <h1>Transfer window</h1>
-        </div>
-      )}
-    </>
-  );
+  return <>{isOpen && <div></div>}</>;
 }

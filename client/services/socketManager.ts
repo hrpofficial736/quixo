@@ -1,9 +1,8 @@
 import { SocketListenForEventInterface } from "@/types/socketResponses";
-import toast from "react-hot-toast";
 
 let socket: WebSocket | null = null;
 
-export default function useSocket() {
+export default function socketManager() {
   return { createSocket, getSocket, emitEvent, listenEvent, disconnect };
 }
 

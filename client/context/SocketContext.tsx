@@ -1,12 +1,12 @@
 "use client";
 
-import useSocket from "@/hooks/useSocket";
+import socketManager from "@/services/socketManager";
 import { createContext, useContext, useEffect, useState } from "react";
 
 const SocketContext = createContext<WebSocket | null>(null);
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const { disconnect, createSocket } = useSocket();
+  const { disconnect, createSocket } = socketManager();
   const [socket, setSocket] = useState<WebSocket | null>(null);
   useEffect(() => {
     createSocket((ws) => {
