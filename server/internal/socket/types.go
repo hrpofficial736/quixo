@@ -1,10 +1,14 @@
 package socket
 
-import "github.com/gorilla/websocket"
+import (
+	"encoding/json"
+
+	"github.com/gorilla/websocket"
+)
 
 type SocketRequest struct {
-	EventName string            `json:"eventName"`
-	Data      map[string]string `json:"data"`
+	EventName string          `json:"eventName"`
+	Data      json.RawMessage `json:"data"`
 }
 
 type SocketResponse struct {
@@ -15,7 +19,8 @@ type SocketResponse struct {
 }
 
 type Client struct {
-	ID        string
-	Conn      *websocket.Conn
-	PairingID string
+	ID         string
+	DeviceName string
+	Conn       *websocket.Conn
+	PairingID  string
 }

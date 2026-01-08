@@ -1,59 +1,58 @@
 "use client";
 
 import Window from "@/components/Window";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ConnectionOptions from "./ConnectionOptions";
 import DeviceNamePrompt from "./DeviceNamePrompt";
 import getRedirectUrl from "@/lib/redirectUrlHelper";
-import socketManager from "@/services/socketManager";
-import { useAppSocket } from "@/context/SocketContext";
 import toast from "react-hot-toast";
+import useInitializeConnection from "@/hooks/useInitializeConnection";
+import { useUserStore } from "@/stores/useUserStore";
 
 export default function ConnectionWindow({
   isOpen,
   onCloseAction,
+  navigateToTransferWindow,
 }: {
   isOpen: boolean;
   onCloseAction: () => void;
+  navigateToTransferWindow: () => void;
 }) {
   const [proceedToConnectionOptions, setProceedToConnectionOptions] =
     useState<boolean>(false);
 
   const [redirectUrl, setRedirectUrl] = useState<string>("");
-
-  const { emitEvent, listenEvent } = socketManager();
-
-  const socket = useAppSocket();
-
-  const sendReadyToPairDeviceEventToSignalingServer = (data: object) => {
-    emitEvent(socket!, "ready_to_pair", data);
-  };
-
-  const handleNameSubmit = (name: string) => {
+  const { setUser } = useUserStore();
+  const { execute, readyToPair, connected } = useInitializeConnection();
+  const initializeConnectionHandler = (name: string) => {
     const { url, pairingId } = getRedirectUrl(name);
+    setUser({ deviceName: name });
     setRedirectUrl(url);
-    sendReadyToPairDeviceEventToSignalingServer({
+    console.log(url);
+    setProceedToConnectionOptions(true);
+    execute({
       deviceName: name,
       redirectUrl: url,
-      status: "WAITING",
       pairingId,
-    });
-    listenEvent(socket!, (params) => {
-      if (params.eventName === "ready_to_pair") {
-        if (params.success) {
-          toast.success("Your device is ready to be paired.");
-          setProceedToConnectionOptions(true);
-          return;
-        }
-        toast.error("Error pairing your device, please try again");
-      }
-    });
-
-    listenEvent(socket!, (params) => {
-      if (params.eventName === "request_to_pair") {
-      }
+      status: "WAITING",
     });
   };
+
+  useEffect(() => {
+    if (readyToPair === "READY_TO_PAIR") {
+      setProceedToConnectionOptions(true);
+      toast.success("Your device is ready to be paired");
+    } else if (readyToPair === "FAILED") {
+      toast.loading("Some error occured, please try again");
+    }
+  }, [readyToPair]);
+
+  useEffect(() => {
+    if (connected) {
+      toast.success("You are successfully connected with ");
+      navigateToTransferWindow();
+    }
+  }, [connected]);
 
   return (
     <>
@@ -66,7 +65,7 @@ export default function ConnectionWindow({
           {proceedToConnectionOptions ? (
             <ConnectionOptions url={redirectUrl} />
           ) : (
-            <DeviceNamePrompt onSubmit={handleNameSubmit} />
+            <DeviceNamePrompt onSubmit={initializeConnectionHandler} />
           )}
         </Window>
       )}

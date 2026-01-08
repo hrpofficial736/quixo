@@ -7,6 +7,7 @@ export default function rtcManager() {
     createAnswer,
     setAnswer,
     createDataChannel,
+    listenForDataChannel,
   };
 }
 
@@ -75,5 +76,18 @@ function createDataChannel(pc: RTCPeerConnection) {
 
   dataChannel.onmessage = (event) => {
     console.log("received data in data channel: ", event.data);
+  };
+}
+
+function listenForDataChannel(pc: RTCPeerConnection, handler: () => void) {
+  pc.ondatachannel = (event) => {
+    const channel = event.channel;
+    channel.onopen = () => {
+      console.log("data channel is open now!");
+      handler();
+    };
+    channel.onmessage = (event) => {
+      console.log("received: ", event.data);
+    };
   };
 }

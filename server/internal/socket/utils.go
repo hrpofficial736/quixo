@@ -11,5 +11,4 @@ func sendEvent(conn *websocket.Conn, data SocketResponse) {
 	if err != nil {
 		log.Println("Error writing the message...")
 	}
-
 }

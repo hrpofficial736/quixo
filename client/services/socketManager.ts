@@ -1,6 +1,7 @@
 import { SocketListenForEventInterface } from "@/types/socketResponses";
 
 let socket: WebSocket | null = null;
+const listeners = new Map<string, ((data: any) => void)[]>();
 
 export default function socketManager() {
   return { createSocket, getSocket, emitEvent, listenEvent, disconnect };
@@ -16,6 +17,15 @@ function createSocket(onOpenHandler: (ws: WebSocket) => void) {
 
   socket.onerror = (e) => {
     console.error("websocket error: ", e);
+  };
+
+  socket.onmessage = (event) => {
+    try {
+      const { eventName, data, success, message } = JSON.parse(event.data);
+      dispatch(eventName, { eventName, data, success, message });
+    } catch (e) {
+      console.log("invalid websocket message...: ", e);
+    }
   };
   return socket;
 }
@@ -45,21 +55,19 @@ function emitEvent(ws: WebSocket, event: string, data: object) {
 }
 
 function listenEvent(
-  ws: WebSocket,
+  eventName: string,
   listener: (params: SocketListenForEventInterface) => void,
 ) {
-  if (ws) {
-    ws.onmessage = (event) => {
-      try {
-        const { eventName, data, success, message } = JSON.parse(event.data);
-        listener({ eventName, data, success, message });
-      } catch (e) {
-        console.log("invalid websocket message...: ", e);
-      }
-    };
-  } else {
-    console.error("No websocket connection found!");
+  if (!listeners.has(eventName)) {
+    listeners.set(eventName, []);
   }
+  listeners.get(eventName)?.push(listener);
+}
+
+function dispatch(eventName: string, data: SocketListenForEventInterface) {
+  listeners.get(eventName)?.forEach((handler) => {
+    handler(data);
+  });
 }
 
 function disconnect() {

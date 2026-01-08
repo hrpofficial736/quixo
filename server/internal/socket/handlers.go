@@ -1,12 +1,15 @@
 package socket
 
 import (
+	"log"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 func addToRoom(req SocketRequest, conn *websocket.Conn, host bool) {
-	pairingId := req.Data["pairingId"]
+	log.Println("room addition request received: ", req.EventName, req.Data)
+	pairingId := req.
 	var success bool
 	var msg string
 	var data interface{}
@@ -35,19 +38,34 @@ func addToRoom(req SocketRequest, conn *websocket.Conn, host bool) {
 		Conn:      conn,
 		PairingID: pairingId,
 	}
+	if host {
+		client.DeviceName = req.Data["deviceName"]
+	} else {
+		client.DeviceName = req.Data["thisDeviceName"]
+	}
 	(*rooms)[pairingId] = append((*rooms)[pairingId], client)
 	if !host {
 		res.EventName, res.Success, res.Message = "room_ready", true, "Both clients are added in the room successfully"
-		for _, client := range (*rooms)[pairingId] {
-			sendEvent(client.Conn, res)
+		for id, cl := range (*rooms)[pairingId] {
+			var otherDeviceName string
+			if id == 0 {
+				otherDeviceName = client.DeviceName
+			} else {
+				otherDeviceName = req.Data["deviceName"]
+			}
+			res.Data = map[string]string{"id": cl.ID, "pairingId": pairingId, "otherDeviceName": otherDeviceName}
+			sendEvent(cl.Conn, res)
 		}
 		return
 	}
-	res.Success, res.Message = true, "Device ready to be paired!"
+	res.EventName, res.Success, res.Message = "ready_to_pair", true, "Device ready to be paired!"
+	res.Data = map[string]string{"id": client.ID, "pairingId": pairingId}
+	log.Println("sending ready to pair event to host...")
 	sendEvent(conn, res)
 }
 
 func sendICECandidates(req SocketRequest, conn *websocket.Conn) {
+	log.Println("ice candidates received: ", req.EventName, req.Data)
 	pairingId := req.Data["pairingId"]
 	clientId := req.Data["clientId"]
 
@@ -69,6 +87,7 @@ func sendICECandidates(req SocketRequest, conn *websocket.Conn) {
 }
 
 func sendSessionDescription(req SocketRequest, conn *websocket.Conn) {
+	log.Println("sd received: ", req.EventName, req.Data)
 	pairingId := req.Data["pairingId"]
 	clientId := req.Data["clientId"]
 
