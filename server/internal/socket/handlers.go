@@ -7,14 +7,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func addToRoom(req SocketRequest, conn *websocket.Conn, host bool) {
-	log.Println("room addition request received: ", req.EventName, req.Data)
-	pairingId := req.
+func addToRoom(eventName string, payload map[string]string, conn *websocket.Conn, host bool) {
+	log.Println("room addition request received: ", eventName, payload)
+	pairingId := payload["pairingId"]
 	var success bool
 	var msg string
 	var data interface{}
 	res := SocketResponse{
-		EventName: req.EventName,
+		EventName: eventName,
 		Success:   success,
 		Message:   msg,
 		Data:      data,
@@ -39,9 +39,9 @@ func addToRoom(req SocketRequest, conn *websocket.Conn, host bool) {
 		PairingID: pairingId,
 	}
 	if host {
-		client.DeviceName = req.Data["deviceName"]
+		client.DeviceName = payload["deviceName"]
 	} else {
-		client.DeviceName = req.Data["thisDeviceName"]
+		client.DeviceName = payload["thisDeviceName"]
 	}
 	(*rooms)[pairingId] = append((*rooms)[pairingId], client)
 	if !host {
@@ -51,7 +51,7 @@ func addToRoom(req SocketRequest, conn *websocket.Conn, host bool) {
 			if id == 0 {
 				otherDeviceName = client.DeviceName
 			} else {
-				otherDeviceName = req.Data["deviceName"]
+				otherDeviceName = payload["deviceName"]
 			}
 			res.Data = map[string]string{"id": cl.ID, "pairingId": pairingId, "otherDeviceName": otherDeviceName}
 			sendEvent(cl.Conn, res)
@@ -64,16 +64,16 @@ func addToRoom(req SocketRequest, conn *websocket.Conn, host bool) {
 	sendEvent(conn, res)
 }
 
-func sendICECandidates(req SocketRequest, conn *websocket.Conn) {
-	log.Println("ice candidates received: ", req.EventName, req.Data)
-	pairingId := req.Data["pairingId"]
-	clientId := req.Data["clientId"]
+func sendICECandidates(eventName string, payload IceCandidatesPayload, conn *websocket.Conn) {
+	log.Println("ice candidates received: ", payload.Candidate)
+	pairingId := payload.PairingId
+	clientId := payload.ClientId
 
 	res := SocketResponse{
-		EventName: req.EventName,
+		EventName: eventName,
 		Success:   true,
 		Message:   "Ice candidates received from other client!",
-		Data:      req.Data["candidate"],
+		Data:      map[string]interface{}{"candidate": payload.Candidate},
 	}
 
 	for _, client := range (*rooms)[pairingId] {
@@ -86,16 +86,16 @@ func sendICECandidates(req SocketRequest, conn *websocket.Conn) {
 	sendEvent(conn, res)
 }
 
-func sendSessionDescription(req SocketRequest, conn *websocket.Conn) {
-	log.Println("sd received: ", req.EventName, req.Data)
-	pairingId := req.Data["pairingId"]
-	clientId := req.Data["clientId"]
+func sendSessionDescription(eventName string, payload SessionDescriptionPayload, conn *websocket.Conn) {
+	log.Println("sd received: ", payload.Sd)
+	pairingId := payload.PairingId
+	clientId := payload.ClientId
 
 	res := SocketResponse{
-		EventName: req.EventName,
+		EventName: eventName,
 		Success:   true,
 		Message:   "Session description received from other client!",
-		Data:      req.Data["sd"],
+		Data:      map[string]interface{}{"sd": payload.Sd},
 	}
 
 	for _, client := range (*rooms)[pairingId] {

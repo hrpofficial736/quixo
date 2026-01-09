@@ -24,3 +24,15 @@ type Client struct {
 	Conn       *websocket.Conn
 	PairingID  string
 }
+
+type IceCandidatesPayload struct {
+	ClientId  string      `json:"clientId"`
+	PairingId string      `json:"pairingId"`
+	Candidate interface{} `json:"candidate"`
+}
+
+type SessionDescriptionPayload struct {
+	ClientId  string      `json:"clientId"`
+	PairingId string      `json:"pairingId"`
+	Sd        interface{} `json:"sd"`
+}

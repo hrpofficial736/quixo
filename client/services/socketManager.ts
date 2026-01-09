@@ -1,7 +1,10 @@
 import { SocketListenForEventInterface } from "@/types/socketResponses";
 
 let socket: WebSocket | null = null;
-const listeners = new Map<string, ((data: any) => void)[]>();
+const listeners = new Map<
+  string,
+  ((data: SocketListenForEventInterface) => void)[]
+>();
 
 export default function socketManager() {
   return { createSocket, getSocket, emitEvent, listenEvent, disconnect };

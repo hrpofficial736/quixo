@@ -21,28 +21,37 @@ export default function LandingPage() {
   const handleToggleConnectionWindow = () =>
     setIsConnectionWindowOpen(!isConnectionWindowOpen);
 
-  const navigateToTransferWindowTrigger = () => setShowTransferWindow(true);
+  const navigateToTransferWindowTrigger = () => {
+    setShowTransferWindow(true);
+    setIsConnectionWindowOpen(false);
+  };
   const { navigateToTransferWindow, pair } = useNextDestFromLandingPage();
 
   const handlePair = (params: ReadonlyURLSearchParams, name: string) =>
     pair(params, name);
   useEffect(() => {
-    if (navigateToTransferWindow) {
-      toast.success(
-        "Your device is successfully paired with the device" +
-          params.get("name"),
-      );
-      setShowTransferWindow(true);
-    }
+    const executeNavigationToTransferWindow = () => {
+      if (navigateToTransferWindow) {
+        toast.success(
+          "Your device is successfully connected with the device " +
+            params.get("name"),
+        );
+        setPageToShow("HOME");
+        setShowTransferWindow(true);
+      }
+    };
+    executeNavigationToTransferWindow();
   }, [navigateToTransferWindow]);
 
   useEffect(() => {
-    if (params.size > 0 && !showTransferWindow) {
-      setPageToShow("DEVICE_NAME_PROMPT");
-    }
-    if (params.size === 0) {
-      setPageToShow("HOME");
-    }
+    const decidePageToShow = () => {
+      if (params.size > 0 && !showTransferWindow) {
+        setPageToShow("DEVICE_NAME_PROMPT");
+      } else if (params.size === 0) {
+        setPageToShow("HOME");
+      }
+    };
+    decidePageToShow();
   }, [pageToShow]);
 
   if (pageToShow === "LOADING") return <LoadingPage />;

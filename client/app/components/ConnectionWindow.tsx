@@ -39,17 +39,23 @@ export default function ConnectionWindow({
   };
 
   useEffect(() => {
-    if (readyToPair === "READY_TO_PAIR") {
-      setProceedToConnectionOptions(true);
-      toast.success("Your device is ready to be paired");
-    } else if (readyToPair === "FAILED") {
-      toast.loading("Some error occured, please try again");
-    }
+    const checkIfPaired = () => {
+      if (readyToPair === "READY_TO_PAIR") {
+        setProceedToConnectionOptions(true);
+        toast.success("Your device is ready to be paired");
+      } else if (readyToPair === "FAILED") {
+        toast.loading("Some error occured, please try again");
+      }
+    };
+    checkIfPaired();
   }, [readyToPair]);
 
   useEffect(() => {
     if (connected) {
-      toast.success("You are successfully connected with ");
+      toast.success(
+        "You are successfully connected with " +
+          useUserStore.getState().otherDeviceName,
+      );
       navigateToTransferWindow();
     }
   }, [connected]);
