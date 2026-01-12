@@ -1,16 +1,23 @@
 import { useAppSocket } from "@/context/SocketContext";
 import rtcManager from "@/services/rtcManager";
 import socketManager from "@/services/socketManager";
+import { useConnectionStatusStore } from "@/stores/useConnectionStatusStore";
+import { useFileTransferStore } from "@/stores/useFileTransferStore";
 import { useUserStore } from "@/stores/useUserStore";
+import { useWebRTCConnectionStore } from "@/stores/useWebRTCConnectionStore";
 import { QRCodeDataInterface } from "@/types/socketResponses";
+import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { useRouter } from "next/navigation";
 import { Dispatch, SetStateAction, useState } from "react";
+import toast from "react-hot-toast";
 
 export default function useInitializeConnection() {
   const socket = useAppSocket();
+  const router = useRouter();
   const [readyToPair, setReadyToPair] = useState<string>("WAITING");
   const [connected, setConnected] = useState<boolean>(false);
   const execute = (data: QRCodeDataInterface) =>
-    handleNameSubmit(data, socket!, setReadyToPair, setConnected);
+    handleNameSubmit(data, socket!, setReadyToPair, setConnected, router);
 
   return { execute, readyToPair, connected };
 }
@@ -20,6 +27,7 @@ const handleNameSubmit = (
   socket: WebSocket,
   readyToPairSetter: Dispatch<SetStateAction<string>>,
   connectionStatusSetter: Dispatch<SetStateAction<boolean>>,
+  router: AppRouterInstance,
 ) => {
   const {
     createNewRTCPeerConnection,
@@ -33,9 +41,8 @@ const handleNameSubmit = (
   const { emitEvent, listenEvent } = socketManager();
 
   emitEvent(socket, "ready_to_pair", {
-    deviceName: data.deviceName,
+    thisDeviceName: data.deviceName,
     redirectUrl: data.redirectUrl,
-    status: data.status,
     pairingId: data.pairingId,
   });
 
@@ -59,7 +66,22 @@ const handleNameSubmit = (
     useUserStore.getState().setUser({
       otherDeviceName: params.data["otherDeviceName"] as string,
     });
-    const pc = createNewRTCPeerConnection();
+    const pc = createNewRTCPeerConnection(() => {
+      toast.success("Disconnected with " + params.data["otherDeviceName"]);
+      useUserStore.setState(useUserStore.getInitialState());
+      useWebRTCConnectionStore.setState(
+        useWebRTCConnectionStore.getInitialState(),
+      );
+      useFileTransferStore.setState(useFileTransferStore.getInitialState());
+      useConnectionStatusStore.setState(
+        useConnectionStatusStore.getInitialState(),
+      );
+      toast.success(
+        "Disconnected with " + useUserStore.getState().otherDeviceName,
+      );
+      emitEvent(socket, "delete_room", { pairingId: data.pairingId });
+      router.push("/");
+    });
     const outgoingCandidateQueue: (RTCIceCandidate | null)[] = [];
     let remoteDescriptionSet = false;
     const sendIceCandidate = (candidate: RTCIceCandidate | null) => {

@@ -10,6 +10,9 @@
 
     --color-success: #0ef20a;
     --color-error: #f20a0a;
+
+    --breakpoint-custom600: 600px;
+    --breakpoint-custom400: 400px;
 }
 
 @layer components {
@@ -19,4 +22,8 @@
     .f-c-col {
         @apply flex flex-col justify-center items-center;
     }
+}
+
+*::-webkit-scrollbar {
+    display: none;
 }

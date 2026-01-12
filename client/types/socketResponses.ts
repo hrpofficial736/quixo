@@ -14,5 +14,4 @@ export interface QRCodeDataInterface {
   deviceName: string;
   redirectUrl: string;
   pairingId: string;
-  status: "WAITING" | "CONNECTED" | "OFFLINE";
 }

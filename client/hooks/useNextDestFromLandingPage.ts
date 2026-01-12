@@ -3,22 +3,27 @@
 import { useAppSocket } from "@/context/SocketContext";
 import rtcManager from "@/services/rtcManager";
 import socketManager from "@/services/socketManager";
+import { useConnectionStatusStore } from "@/stores/useConnectionStatusStore";
+import { useFileTransferStore } from "@/stores/useFileTransferStore";
 import { useUserStore } from "@/stores/useUserStore";
-import { ReadonlyURLSearchParams } from "next/navigation";
+import { useWebRTCConnectionStore } from "@/stores/useWebRTCConnectionStore";
+import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { useRouter } from "next/navigation";
 import { Dispatch, SetStateAction, useState } from "react";
 import toast from "react-hot-toast";
 
 export default function useNextDestFromLandingPage() {
   const socket = useAppSocket();
+  const router = useRouter();
   const [navigateToTransferWindow, setNavigateToShowTransferWindow] =
     useState<boolean>(false);
-  const pair = (params: ReadonlyURLSearchParams, thisDeviceName: string) => {
-    console.log("inside pair handler!");
+  const pair = (id: string, thisDeviceName: string) => {
     handlePairWithOtherDevice(
       socket!,
-      params,
+      id,
       setNavigateToShowTransferWindow,
       thisDeviceName,
+      router,
     );
   };
 
@@ -27,11 +32,12 @@ export default function useNextDestFromLandingPage() {
 
 function handlePairWithOtherDevice(
   socket: WebSocket,
-  params: ReadonlyURLSearchParams,
+  id: string,
   navigateToTransferWindowSetter: Dispatch<SetStateAction<boolean>>,
   thisDeviceName: string,
+  router: AppRouterInstance,
 ) {
-  console.log("inside main handler!");
+  console.log("inside main handler!", id);
   const {
     createNewRTCPeerConnection,
     listenForICECandidates,
@@ -41,28 +47,50 @@ function handlePairWithOtherDevice(
   } = rtcManager();
   const { emitEvent, listenEvent } = socketManager();
 
-  if (!socket || params.size === 0) return;
+  if (!socket || !id) return;
 
   emitEvent(socket!, "request_to_pair", {
-    deviceName: params.get("name"),
     redirectUrl: window.location.href,
-    status: params.get("status"),
-    pairingId: params.get("pairing_id"),
     thisDeviceName,
+    pairingId: id,
+  });
+
+  let roomErrorToastShown: boolean = false;
+
+  listenEvent("request_to_pair", (res) => {
+    if (!res.success && !roomErrorToastShown) {
+      toast.error(res.message);
+      roomErrorToastShown = true;
+      router.push("/");
+      return;
+    }
   });
 
   listenEvent("room_ready", (res) => {
     if (!res.success) {
-      toast.error("Error pairing with device: " + res.message);
+      toast.error(res.message);
       navigateToTransferWindowSetter(false);
       return;
     }
+    console.log(res.data);
     useUserStore.getState().setUser({
       id: res.data["id"] as string,
-      pairingId: params.get("pairing_id")!,
-      otherDeviceName: params.get("name")!,
+      pairingId: id,
+      otherDeviceName: res.data["otherDeviceName"] as string,
     });
-    const pc = createNewRTCPeerConnection();
+    const pc = createNewRTCPeerConnection(() => {
+      toast.success("Disconnected with " + res.data["otherDeviceName"]);
+      useUserStore.setState(useUserStore.getInitialState());
+      useWebRTCConnectionStore.setState(
+        useWebRTCConnectionStore.getInitialState(),
+      );
+      useFileTransferStore.setState(useFileTransferStore.getInitialState());
+      useConnectionStatusStore.setState(
+        useConnectionStatusStore.getInitialState(),
+      );
+      emitEvent(socket, "delete_room", { pairingId: id });
+      router.push("/");
+    });
     const outgoingCandidatesQueue: (RTCIceCandidate | null)[] = [];
     let remoteDescriptionSet = false;
 

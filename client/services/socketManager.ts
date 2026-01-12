@@ -11,7 +11,10 @@ export default function socketManager() {
 }
 
 function createSocket(onOpenHandler: (ws: WebSocket) => void) {
-  socket = new WebSocket(process.env.NEXT_PUBLIC_SERVER_URL!);
+  socket = new WebSocket(
+    `${window.location.protocol === "https:" ? "wss" : "ws"}://` +
+      `${window.location.hostname}:5000`,
+  );
 
   socket.onopen = () => {
     console.log("websocket connected!");

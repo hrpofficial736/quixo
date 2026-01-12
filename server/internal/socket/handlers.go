@@ -21,7 +21,7 @@ func addToRoom(eventName string, payload map[string]string, conn *websocket.Conn
 	}
 	if (*rooms)[pairingId] == nil {
 		if !host {
-			res.Success, res.Message = false, "No room exists for this pairing id!"
+			res.Success, res.Message = false, "Room not found!"
 			sendEvent(conn, res)
 			return
 		}
@@ -34,14 +34,10 @@ func addToRoom(eventName string, payload map[string]string, conn *websocket.Conn
 		return
 	}
 	client := Client{
-		ID:        uuid.NewString(),
-		Conn:      conn,
-		PairingID: pairingId,
-	}
-	if host {
-		client.DeviceName = payload["deviceName"]
-	} else {
-		client.DeviceName = payload["thisDeviceName"]
+		ID:         uuid.NewString(),
+		Conn:       conn,
+		PairingID:  pairingId,
+		DeviceName: payload["thisDeviceName"],
 	}
 	(*rooms)[pairingId] = append((*rooms)[pairingId], client)
 	if !host {
@@ -51,8 +47,9 @@ func addToRoom(eventName string, payload map[string]string, conn *websocket.Conn
 			if id == 0 {
 				otherDeviceName = client.DeviceName
 			} else {
-				otherDeviceName = payload["deviceName"]
+				otherDeviceName = (*rooms)[pairingId][0].DeviceName
 			}
+			log.Println(host, otherDeviceName)
 			res.Data = map[string]string{"id": cl.ID, "pairingId": pairingId, "otherDeviceName": otherDeviceName}
 			sendEvent(cl.Conn, res)
 		}
@@ -106,4 +103,8 @@ func sendSessionDescription(eventName string, payload SessionDescriptionPayload,
 	}
 	res.Success, res.Message = false, "No client found to send this session description!"
 	sendEvent(conn, res)
+}
+
+func deleteRoom(pairingId string) {
+	delete(*rooms, pairingId)
 }

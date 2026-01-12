@@ -1,20 +1,36 @@
+"use client";
+
+import { motion } from "motion/react";
+
 export default function Header({ onTrigger }: { onTrigger: () => void }) {
   return (
-    <div className={`p-5 w-full h-full border-2 border-red-500 f-c-col`}>
-      <h1 className="text-4xl font-semibold text-textPrimary">Quixo</h1>
-      <p className="text-textTertiary ">
-        Don&apos;t be scared. The things out there that are unknown aren&apos;t
-        scary in themselves. They are just unknown at the moment. Take the time
-        to know them before you list them as scary. Then the world will be a
-        much less scary place for you.{" "}
+    <motion.div
+      initial={{
+        opacity: 0,
+      }}
+      animate={{
+        opacity: 1,
+      }}
+      transition={{
+        duration: 0.7,
+      }}
+      className={`p-5 w-full h-full f-c-col`}
+    >
+      <h1 className="text-6xl sm:text-8xl lg:text-9xl font-bold bg-clip-text bg-linear-to-b from-textPrimary to-textPrimary/20 text-transparent">
+        Quixo
+      </h1>
+      <p className="text-textTertiary sm:text-xl max-w-2xl text-center mt-2">
+        Quixo is a secure, peer-to-peer file sharing platform that lets you
+        transfer files instantly between devices using WebRTC — with no uploads,
+        no sign-ups, and complete privacy.
       </p>
       <input className="hidden" type="file" />
       <button
         onClick={onTrigger}
-        className="p-3 bg-textSecondary cursor-pointer rounded-xl text-xl font-semibold"
+        className="py-3 px-7 active:scale-[0.98] transition-all bg-linear-to-b from-textPrimary to-textPrimary/60 cursor-pointer rounded-full text-lg sm:text-xl font-semibold mt-7"
       >
-        Connect
+        Start Connection
       </button>
-    </div>
+    </motion.div>
   );
 }

@@ -1,6 +1,6 @@
-const dataChannels = new WeakMap<RTCPeerConnection, RTCDataChannel>();
+import { useWebRTCConnectionStore } from "@/stores/useWebRTCConnectionStore";
 
-const candidateQueues = new WeakMap<RTCPeerConnection, RTCIceCandidate[]>();
+let candidateQueues = new WeakMap<RTCPeerConnection, RTCIceCandidate[]>();
 
 export default function rtcManager() {
   return {
@@ -12,16 +12,27 @@ export default function rtcManager() {
     setAnswer,
     createDataChannel,
     listenForDataChannel,
+    listenForDataChannelMessage,
   };
 }
 
-function createNewRTCPeerConnection() {
+function createNewRTCPeerConnection(onCloseHandler: () => void) {
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: process.env.NEXT_PUBLIC_GOOGLE_ICE_SERVER_URL! }],
   });
 
   pc.onconnectionstatechange = () => {
     console.log("connection state changed: ", pc.connectionState);
+    if (
+      pc.connectionState === "disconnected" ||
+      pc.connectionState === "closed"
+    ) {
+      if (onCloseHandler) {
+        console.log("disconnected handler called!");
+        onCloseHandler();
+      }
+      candidateQueues = new WeakMap<RTCPeerConnection, RTCIceCandidate[]>();
+    }
   };
   pc.oniceconnectionstatechange = () => {
     console.log("ICE:", pc.iceConnectionState);
@@ -29,6 +40,8 @@ function createNewRTCPeerConnection() {
   pc.onicegatheringstatechange = () => {
     console.log("ICE gathering:", pc.iceGatheringState);
   };
+
+  useWebRTCConnectionStore.getState().setPC(pc);
 
   return pc;
 }
@@ -137,18 +150,12 @@ async function setAnswer(
   }
 }
 
-function createDataChannel(pc: RTCPeerConnection, handler: () => void) {
+function createDataChannel(pc: RTCPeerConnection, handler?: () => void) {
   const dataChannel = pc.createDataChannel("file-transfer");
-
-  dataChannels.set(pc, dataChannel);
-
   dataChannel.onopen = () => {
+    useWebRTCConnectionStore.getState().setDataChannel(dataChannel);
     console.log("data channel is open now!");
     if (handler) handler();
-  };
-
-  dataChannel.onmessage = (event) => {
-    console.log("received data in data channel: ", event.data);
   };
 }
 
@@ -156,11 +163,21 @@ function listenForDataChannel(pc: RTCPeerConnection, handler: () => void) {
   pc.ondatachannel = (event) => {
     const channel = event.channel;
     channel.onopen = () => {
+      useWebRTCConnectionStore.getState().setDataChannel(channel);
       console.log("data channel is open now!");
       handler();
     };
-    channel.onmessage = (event) => {
-      console.log("received: ", event.data);
-    };
+  };
+}
+
+function listenForDataChannelMessage(
+  dc: RTCDataChannel,
+  handler: (event: MessageEvent) => void,
+) {
+  if (!dc) return;
+  dc.addEventListener("message", handler);
+
+  return () => {
+    dc.removeEventListener("message", handler);
   };
 }

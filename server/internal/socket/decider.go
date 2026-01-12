@@ -49,5 +49,13 @@ func decider(req SocketRequest, conn *websocket.Conn) {
 			return
 		}
 		sendSessionDescription(req.EventName, payload, conn)
+
+	case "delete_room":
+		var data map[string]string
+		if err := json.Unmarshal(req.Data, &data); err != nil {
+			log.Println("invalid delete_room payload")
+			return
+		}
+		deleteRoom(data["pairingId"])
 	}
 }
