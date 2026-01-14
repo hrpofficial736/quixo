@@ -7,7 +7,14 @@ const listeners = new Map<
 >();
 
 export default function socketManager() {
-  return { createSocket, getSocket, emitEvent, listenEvent, disconnect };
+  return {
+    createSocket,
+    getSocket,
+    emitEvent,
+    listenEvent,
+    disconnect,
+    removeAllListeners,
+  };
 }
 
 function createSocket(onOpenHandler: (ws: WebSocket) => void) {
@@ -80,5 +87,13 @@ function disconnect() {
   if (socket) {
     socket.close();
     socket = null;
+  }
+}
+
+function removeAllListeners(eventName?: string) {
+  if (eventName) {
+    listeners.delete(eventName);
+  } else {
+    listeners.clear();
   }
 }

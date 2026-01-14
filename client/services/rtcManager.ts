@@ -31,6 +31,14 @@ function createNewRTCPeerConnection(onCloseHandler: () => void) {
         console.log("disconnected handler called!");
         onCloseHandler();
       }
+
+      pc.onicecandidate = null;
+      pc.ontrack = null;
+      pc.ondatachannel = null;
+      pc.onconnectionstatechange = null;
+      pc.oniceconnectionstatechange = null;
+      pc.close();
+
       candidateQueues = new WeakMap<RTCPeerConnection, RTCIceCandidate[]>();
     }
   };
@@ -109,6 +117,7 @@ async function createAnswer(
   handler: (answer: RTCSessionDescriptionInit) => void,
 ) {
   console.log(offer);
+  if (!pc || pc.signalingState !== "stable") return;
   await pc.setRemoteDescription(offer);
   const queue = candidateQueues.get(pc);
   if (queue && queue.length > 0) {
@@ -121,8 +130,12 @@ async function createAnswer(
     }
     candidateQueues.delete(pc);
   }
+
   const answer = await pc.createAnswer();
   console.log("answer created: ", answer);
+  if (pc.signalingState === "stable") {
+    return;
+  }
   await pc.setLocalDescription(answer);
   handler(answer);
 }
@@ -132,17 +145,19 @@ async function setAnswer(
   answer: RTCSessionDescriptionInit,
 ) {
   try {
-    await pc.setRemoteDescription(answer);
-    const queue = candidateQueues.get(pc);
-    if (queue && queue.length > 0) {
-      for (const candidate of queue) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (error) {
-          console.error("Error adding queued ICE candidates", error);
+    if (pc.signalingState !== "stable") {
+      await pc.setRemoteDescription(answer);
+      const queue = candidateQueues.get(pc);
+      if (queue && queue.length > 0) {
+        for (const candidate of queue) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (error) {
+            console.error("Error adding queued ICE candidates", error);
+          }
         }
+        candidateQueues.delete(pc);
       }
-      candidateQueues.delete(pc);
     }
   } catch (error) {
     console.error("Error setting remote answer", answer);

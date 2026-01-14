@@ -38,7 +38,14 @@ const handleNameSubmit = (
     setAnswer,
   } = rtcManager();
 
-  const { emitEvent, listenEvent } = socketManager();
+  const { emitEvent, listenEvent, removeAllListeners } = socketManager();
+
+  // Cleanup: Close any existing PC and remove previous listeners
+  useWebRTCConnectionStore.getState().closePC();
+  removeAllListeners("ready_to_pair");
+  removeAllListeners("room_ready");
+  removeAllListeners("answer");
+  removeAllListeners("ice-candidates");
 
   emitEvent(socket, "ready_to_pair", {
     thisDeviceName: data.deviceName,
@@ -66,7 +73,11 @@ const handleNameSubmit = (
     useUserStore.getState().setUser({
       otherDeviceName: params.data["otherDeviceName"] as string,
     });
-    const pc = createNewRTCPeerConnection(() => {
+    let isDisconnecting = false;
+
+    const disconnect = () => {
+      if (isDisconnecting) return;
+      isDisconnecting = true;
       toast.success("Disconnected with " + params.data["otherDeviceName"]);
       useUserStore.setState(useUserStore.getInitialState());
       useWebRTCConnectionStore.setState(
@@ -76,12 +87,12 @@ const handleNameSubmit = (
       useConnectionStatusStore.setState(
         useConnectionStatusStore.getInitialState(),
       );
-      toast.success(
-        "Disconnected with " + useUserStore.getState().otherDeviceName,
-      );
-      emitEvent(socket, "delete_room", { pairingId: data.pairingId });
       router.push("/");
-    });
+    };
+
+    // Pass the disconnect handler to PC creation so it runs on PC state change
+    const pc = createNewRTCPeerConnection(disconnect);
+
     const outgoingCandidateQueue: (RTCIceCandidate | null)[] = [];
     let remoteDescriptionSet = false;
     const sendIceCandidate = (candidate: RTCIceCandidate | null) => {
@@ -146,6 +157,9 @@ const handleNameSubmit = (
     });
 
     listenEvent("ice-candidates", (params) => {
+      if (!pc || pc.signalingState === "closed") {
+        return;
+      }
       if (!params.success) {
         console.error("ice-candidates event failed!", params.message);
         return;
@@ -153,6 +167,16 @@ const handleNameSubmit = (
       const candidate = params.data["candidate"] as RTCIceCandidate | null;
       if (candidate) {
         addIceCandidate(pc, candidate);
+      }
+    });
+
+    listenEvent("room_deleted", (params) => {
+      if (params.success) {
+        console.log("Room deleted event received! Disconnecting...");
+        // Force cleanup immediately
+        disconnect();
+        // Also ensure PC is closed
+        useWebRTCConnectionStore.getState().closePC();
       }
     });
   });

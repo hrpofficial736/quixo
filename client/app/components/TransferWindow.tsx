@@ -4,7 +4,6 @@ import Window from "@/components/Window";
 import { useAppSocket } from "@/context/SocketContext";
 import useHandleFileTransfer from "@/hooks/useHandleFileTransfer";
 import socketManager from "@/services/socketManager";
-import { useConnectionStatusStore } from "@/stores/useConnectionStatusStore";
 import { useFileTransferStore } from "@/stores/useFileTransferStore";
 import { useUserStore } from "@/stores/useUserStore";
 import { useWebRTCConnectionStore } from "@/stores/useWebRTCConnectionStore";
@@ -12,7 +11,6 @@ import {
   FileTransferMetaDataRequestInterface,
   TransferInterface,
 } from "@/types/fileTransferInterfaces";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { IoIosSend } from "react-icons/io";
@@ -25,41 +23,42 @@ export default function TransferWindow({
   onClose: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const router = useRouter();
   const { emitEvent } = socketManager();
   const socket = useAppSocket();
-  const { datachannel, setPC, setDataChannel, closePC } =
-    useWebRTCConnectionStore();
+  const { datachannel, closePC } = useWebRTCConnectionStore();
   const [requests, setRequests] = useState<
     FileTransferMetaDataRequestInterface[]
   >([]);
-  const fileRef = useRef<File | null>(null);
   const { sendFile, sendExtraInfo, listenForExtraInfo, listenForFile } =
     useHandleFileTransfer();
 
+  const filesRef = useRef<Map<string, File> | null>(null);
+
   const [transfers, setTransfers] = useState<TransferInterface[]>([]);
 
-  const handleResponse = (res: boolean) => {
+  // const transferQueue = useRef<TransferInterface[]>([]); // Removed in favor of state+ref pattern
+  // const activeTransferId = useRef<string | null>(null); // Unused
+  const isTransferringRef = useRef(false);
+
+  const handleResponse = (res: boolean, id: string) => {
     sendExtraInfo(datachannel!, {
       name: "METADATA-ACK",
+      id,
       res: res ? "ACC" : "REJ",
     });
-    setRequests([]);
+    console.log(requests);
+    setRequests((prev) => {
+      console.log(prev.filter((request) => request.id !== id));
+      return prev.filter((request) => request.id !== id);
+    });
     if (res) {
-      const fileInfo = {
-        name: requests[0].name,
-        size: requests[0].size,
-        mime: requests[0].mime,
-        chunkSize: requests[0].chunkSize,
-      };
-      useFileTransferStore.getState().setFileMetadata(fileInfo);
+      const fileInfo = requests.filter((request) => request.id === id)[0];
       setTransfers((prev) => {
-        const current = prev.length === 0;
         return [
           ...prev,
           {
             ...fileInfo,
-            current,
+            current: "WAIT",
           },
         ];
       });
@@ -67,76 +66,172 @@ export default function TransferWindow({
   };
 
   const handleFileChange = () => {
-    const file = fileInputRef.current?.files![0];
-    console.log(file?.name, file?.size);
-    fileRef.current = file!;
-    sendExtraInfo(datachannel!, {
-      name: "META",
-      fileName: file?.name,
-      size: file?.size,
-      mime: file?.type,
-      chunkSize: 16384,
-    });
+    if (!fileInputRef.current || !fileInputRef.current.files) return;
+    console.log(fileInputRef.current.files);
+    for (const file of fileInputRef.current.files) {
+      const fileInfo = {
+        name: "META",
+        id: crypto.randomUUID(),
+        fileName: file.name,
+        size: file.size,
+        mime: file.type,
+        chunkSize: 16384,
+      };
+
+      if (!filesRef.current) {
+        filesRef.current = new Map();
+      }
+      filesRef.current.set(fileInfo.id, file);
+      console.log("file info going in META is: ", fileInfo);
+      setTransfers((prev) => [
+        ...prev,
+        {
+          id: fileInfo.id,
+          name: fileInfo.fileName,
+          size: fileInfo.size,
+          chunkSize: fileInfo.chunkSize,
+          mime: fileInfo.mime,
+          current: "STOP",
+        },
+      ]);
+      console.log(transfers);
+      sendExtraInfo(datachannel!, fileInfo);
+    }
   };
+
+  // Keep a ref to transfers to avoid re-binding event listeners on every state change
+  const transfersRef = useRef(transfers);
+  useEffect(() => {
+    transfersRef.current = transfers;
+  }, [transfers]);
 
   // Event for listening file metadata on receiver end
   useEffect(() => {
     const cleanup = listenForExtraInfo(datachannel!, "META", (info) => {
+      console.log("info coming in META is: ", info);
       const data = info as FileTransferMetaDataRequestInterface;
-      if (requests.length === 0) {
-        setRequests((prev) => [
-          ...prev,
-          {
-            name: data.name,
-            size: data.size,
-            chunkSize: 16384,
-            mime: data.mime,
-          },
-        ]);
+      console.log(info, data);
+
+      // Check if this is a "Start Signal" for an existing transfer (Receiver side)
+      // Read from ref to avoid dependency loop
+      const isExistingTransfer = transfersRef.current.some(t => t.id === data.id);
+      
+      if (isExistingTransfer) {
+         console.log("Receiver: Start Signal recognized for:", data.name);
+         setTransfers((prev) => prev.map(t => t.id === data.id ? { ...t, current: "START" } : t));
+         return; 
       }
-    });
-    return cleanup;
-  }, [datachannel, requests]);
 
-  // Event for listening file metadata acknowledgement on sender end
-  useEffect(() => {
-    const cleanup = listenForExtraInfo(datachannel!, "METADATA-ACK", (res) => {
-      console.log("inside file request ack listener!", fileRef.current);
-
-      if (res) {
-        sendFile(datachannel!, fileRef.current!, () => {
-          setTransfers((prev) => prev.slice(1));
-        });
-        const fileInfo = {
-          name: fileRef.current?.name as string,
-          size: fileRef.current?.size as number,
-          mime: fileRef.current?.type as string,
-          chunkSize: 16384,
-        };
-        useFileTransferStore.getState().setFileMetadata(fileInfo);
-        setTransfers((prev) => {
-          const current = prev.length === 0;
+      // Otherwise, it's a new request
+      setRequests((prev) => {
+          if (prev.some(r => r.id === data.id)) return prev;
           return [
             ...prev,
             {
-              ...fileInfo,
-              current,
+              id: data.id,
+              name: data.name,
+              size: data.size,
+              chunkSize: 16384,
+              mime: data.mime,
             },
           ];
+      });
+    });
+    console.log(requests);
+    return cleanup;
+  }, [datachannel, listenForExtraInfo]); // Removed transfers from dependency!
+
+  // Queue Processor
+  useEffect(() => {
+    // Only the SENDER runs this queue logic (indicated by filesRef presence)
+    if (!filesRef.current) return;
+    
+    if (isTransferringRef.current) return;
+    
+    const nextTransfer = transfers.find((t) => t.current === "WAIT");
+
+    if (nextTransfer && datachannel) {
+      isTransferringRef.current = true;
+      // Mark as started in UI
+      setTransfers((prev) =>
+        prev.map((t) =>
+          t.id === nextTransfer.id ? { ...t, current: "START" } : t,
+        ),
+      );
+
+      const file = filesRef.current?.get(nextTransfer.id!);
+      if (file) {
+        const fileInfo = {
+          name: nextTransfer.name || "",
+          size: nextTransfer.size,
+          mime: nextTransfer.mime,
+          chunkSize: nextTransfer.chunkSize,
+        };
+        useFileTransferStore.getState().setFileMetadata(fileInfo);
+        
+        // RESEND META to reset context on Receiver for this specific file
+        console.log("Resending META for context before start:", nextTransfer.id);
+        sendExtraInfo(datachannel, { 
+            name: "META", 
+            id: nextTransfer.id,
+            fileName: nextTransfer.name,
+            size: nextTransfer.size,
+            mime: nextTransfer.mime,
+            chunkSize: nextTransfer.chunkSize
         });
-      } else toast.error("File transfer request rejected by the receiver!");
+
+        // Small delay to ensure META arrives before bytes? usually ordered on DataChannel
+        sendFile(datachannel, file, () => {
+          isTransferringRef.current = false;
+          setTransfers((prev) => prev.filter((t) => t.id !== nextTransfer.id));
+        });
+      } else {
+        // Error case: file missing, unblock queue
+        isTransferringRef.current = false;
+        setTransfers((prev) => prev.filter((t) => t.id !== nextTransfer.id));
+      }
+    }
+  }, [transfers, datachannel, sendFile, sendExtraInfo]);
+
+  // Event for listening file metadata acknowledgement on sender end
+  useEffect(() => {
+    const cleanup = listenForExtraInfo(datachannel!, "METADATA-ACK", (data) => {
+      console.log(data);
+      if (!data || !("res" in data) || !data.id) return;
+      // Use ref to check length/existence to avoid re-binding
+      if (!filesRef.current || transfersRef.current.length === 0) return;
+
+      console.log("data coming in METADATA-ACK response is: ", data);
+
+      if (data.res) {
+        // Mark the specific transfer as 'WAIT' so the effect picks it up
+        setTransfers((prev) =>
+          prev.map((t) =>
+            t.id === data.id ? { ...t, current: "WAIT" } : t,
+          ),
+        );
+      } else {
+        setTransfers((prev) => {
+          return prev.filter((transfer) => transfer.id !== data.id);
+        });
+        toast.error("File transfer request rejected by the receiver!");
+      }
     });
     return cleanup;
-  }, [datachannel]);
+  }, [datachannel, listenForExtraInfo]); // Removed transfers from dependency!
 
   // Event for listening completion of file transfer on receiver end
   useEffect(() => {
-    const cleanup = listenForExtraInfo(datachannel!, "FILE_SENT", (res) => {
+    const cleanup = listenForExtraInfo(datachannel!, "FILE_SENT", (data) => {
+      if (!data) return;
+      if (!("res" in data)) return;
       console.log("inside file transfer completion listener!");
 
-      if (res) {
-        toast.success("File sent successfully!");
-        setTransfers((prev) => prev.slice(1));
+      if (data.res) {
+        toast.success("File received successfully!");
+        setTransfers((prev) =>
+          prev.filter((transfer) => transfer.id !== data.id),
+        );
       } else {
         toast.error("Error sending full file!");
       }
@@ -172,27 +267,10 @@ export default function TransferWindow({
                 <button
                   onClick={() => {
                     datachannel?.close();
-                    setDataChannel(null);
                     closePC();
-                    setPC(null);
                     emitEvent(socket!, "delete_room", {
                       pairingId: useUserStore.getState().pairingId,
                     });
-                    toast.success(
-                      "Disconnected with " +
-                        useUserStore.getState().otherDeviceName,
-                    );
-                    useUserStore.setState(useUserStore.getInitialState());
-                    useWebRTCConnectionStore.setState(
-                      useWebRTCConnectionStore.getInitialState(),
-                    );
-                    useFileTransferStore.setState(
-                      useFileTransferStore.getInitialState(),
-                    );
-                    useConnectionStatusStore.setState(
-                      useConnectionStatusStore.getInitialState(),
-                    );
-                    router.push("/");
                   }}
                   className="bg-linear-to-b from-error to-error/50 text-textPrimary rounded-lg text-sm px-3 py-2 font-semibold cursor-pointer"
                 >
@@ -221,12 +299,13 @@ export default function TransferWindow({
                 ref={fileInputRef}
                 className="hidden"
                 type="file"
+                multiple
                 onChange={handleFileChange}
               />
-              {transfers.map((transfer, index) => {
+              {transfers.map((transfer) => {
                 return (
                   <FileTransferProgressComponent
-                    key={index}
+                    key={transfer.id}
                     fileInfo={transfer}
                   />
                 );

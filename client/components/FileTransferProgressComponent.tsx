@@ -11,18 +11,13 @@ export default function FileTransferProgressComponent({
   fileInfo: TransferInterface;
 }) {
   const { progress } = useFileTransferStore();
-  const [size, setSize] = useState<string>("");
-  const [fileProgress, setFileProgress] = useState<number>(progress);
-  useEffect(() => {
-    const updateFileProgress = () => {
-      if (progress >= fileProgress + 1) {
-        console.log(progress.toFixed(2));
-        setFileProgress(progress);
-      }
-    };
+  const [fileProgress, setFileProgress] = useState<number>(0);
 
-    updateFileProgress();
-  }, [progress]);
+  useEffect(() => {
+    if (fileInfo.current !== "START") return;
+    const updateProgress = () => setFileProgress(progress);
+    updateProgress();
+  }, [progress, fileInfo.current]);
 
   return (
     <div className="bg-bgTertiary/10 rounded-xl w-full p-4 flex items-center justify-between">

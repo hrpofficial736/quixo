@@ -37,7 +37,6 @@ function handlePairWithOtherDevice(
   thisDeviceName: string,
   router: AppRouterInstance,
 ) {
-  console.log("inside main handler!", id);
   const {
     createNewRTCPeerConnection,
     listenForICECandidates,
@@ -45,9 +44,16 @@ function handlePairWithOtherDevice(
     addIceCandidate,
     listenForDataChannel,
   } = rtcManager();
-  const { emitEvent, listenEvent } = socketManager();
+  const { emitEvent, listenEvent, removeAllListeners } = socketManager();
 
   if (!socket || !id) return;
+
+  // Cleanup: Close any existing PC and remove only the listeners relevant to this flow
+  useWebRTCConnectionStore.getState().closePC();
+  removeAllListeners("request_to_pair");
+  removeAllListeners("room_ready");
+  removeAllListeners("offer");
+  removeAllListeners("ice-candidates");
 
   emitEvent(socket!, "request_to_pair", {
     redirectUrl: window.location.href,
@@ -78,7 +84,11 @@ function handlePairWithOtherDevice(
       pairingId: id,
       otherDeviceName: res.data["otherDeviceName"] as string,
     });
-    const pc = createNewRTCPeerConnection(() => {
+    let isDisconnecting = false;
+
+    const disconnect = () => {
+      if (isDisconnecting) return;
+      isDisconnecting = true;
       toast.success("Disconnected with " + res.data["otherDeviceName"]);
       useUserStore.setState(useUserStore.getInitialState());
       useWebRTCConnectionStore.setState(
@@ -88,9 +98,11 @@ function handlePairWithOtherDevice(
       useConnectionStatusStore.setState(
         useConnectionStatusStore.getInitialState(),
       );
-      emitEvent(socket, "delete_room", { pairingId: id });
       router.push("/");
-    });
+    };
+
+    const pc = createNewRTCPeerConnection(disconnect);
+
     const outgoingCandidatesQueue: (RTCIceCandidate | null)[] = [];
     let remoteDescriptionSet = false;
 
@@ -157,6 +169,9 @@ function handlePairWithOtherDevice(
       );
     });
     listenEvent("ice-candidates", (params) => {
+      if (!pc || pc.signalingState === "closed") {
+        return;
+      }
       if (!params.success) {
         console.error("ICE candidate event failed!", params.message);
         return;
@@ -166,6 +181,14 @@ function handlePairWithOtherDevice(
       if (candidate) {
         console.log("received ICE candidates from other client!");
         addIceCandidate(pc, candidate);
+      }
+    });
+
+    listenEvent("room_deleted", (params) => {
+      if (params.success) {
+        console.log("Room deleted event received! Disconnecting...");
+        disconnect();
+        useWebRTCConnectionStore.getState().closePC();
       }
     });
   });

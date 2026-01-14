@@ -2,7 +2,11 @@ import downloadBlob from "@/lib/downloadBlob";
 import rtcManager from "@/services/rtcManager";
 import { useFileTransferStore } from "@/stores/useFileTransferStore";
 import { CustomObject } from "@/types/customObjectType";
-import { FileTransferMetaDataRequestInterface } from "@/types/fileTransferInterfaces";
+import {
+  ExtraInfoHandlerParamsInterface,
+  FileTransferMetaDataRequestInterface,
+} from "@/types/fileTransferInterfaces";
+import { useCallback } from "react";
 import toast from "react-hot-toast";
 
 const { listenForDataChannelMessage } = rtcManager();
@@ -12,24 +16,35 @@ let receivedSize: number = 0;
 let fileMetaData: FileTransferMetaDataRequestInterface | null = null;
 
 export default function useHandleFileTransfer() {
-  const listenForFile = (dc: RTCDataChannel) => {
+  const listenForFile = useCallback((dc: RTCDataChannel) => {
     return lff(dc);
-  };
+  }, []);
 
-  const listenForExtraInfo = (
-    dc: RTCDataChannel,
-    eventName: string,
-    handler: (
-      info?: object | FileTransferMetaDataRequestInterface | string | boolean,
-    ) => void,
-  ) => {
-    return lfei(dc, eventName, handler);
-  };
+  const listenForExtraInfo = useCallback(
+    (
+      dc: RTCDataChannel,
+      eventName: string,
+      handler: (
+        info?:
+          | FileTransferMetaDataRequestInterface
+          | ExtraInfoHandlerParamsInterface,
+      ) => void,
+    ) => {
+      return lfei(dc, eventName, handler);
+    },
+    [],
+  );
 
-  const sendFile = (dc: RTCDataChannel, file: File, handler?: () => void) =>
-    sf(dc, file, handler);
+  const sendFile = useCallback(
+    (dc: RTCDataChannel, file: File, handler?: () => void) =>
+      sf(dc, file, handler),
+    [],
+  );
 
-  const sendExtraInfo = (dc: RTCDataChannel, data: object) => sei(dc, data);
+  const sendExtraInfo = useCallback(
+    (dc: RTCDataChannel, data: object) => sei(dc, data),
+    [],
+  );
 
   return {
     listenForFile,
@@ -43,7 +58,9 @@ function lfei(
   dc: RTCDataChannel,
   eventName: string,
   handler?: (
-    info?: object | FileTransferMetaDataRequestInterface | string | boolean,
+    info?:
+      | FileTransferMetaDataRequestInterface
+      | ExtraInfoHandlerParamsInterface,
   ) => void,
 ) {
   console.log(`Setting up listener for: ${eventName}`);
@@ -78,7 +95,7 @@ function lfei(
         console.log(
           `[METADATA-ACK] Response: ${accepted ? "ACCEPTED" : "REJECTED"}`,
         );
-        if (handler) handler(accepted);
+        if (handler) handler({ res: accepted, id: dataObject["id"] });
         break;
 
       case "META":
@@ -88,6 +105,7 @@ function lfei(
 
         toast.success("File transfer request received");
         fileMetaData = {
+          id: dataObject["id"],
           name: dataObject["fileName"],
           size: Number.parseInt(dataObject["size"]),
           chunkSize: Number.parseInt(dataObject["chunkSize"]),
@@ -108,11 +126,12 @@ function lfei(
 
         if (!fileMetaData) {
           console.error("[FILE_SENT] File metadata is missing!");
-          if (handler) handler(false);
+          if (handler) handler({ res: false });
           return;
         }
 
         const isComplete = receivedSize === fileMetaData.size;
+        const completedId = fileMetaData.id; // Capture ID
 
         if (receivedSize > 0 && isComplete && receivedBuffers.length > 0) {
           console.log("[FILE_SENT] Creating blob and downloading...");
@@ -123,12 +142,12 @@ function lfei(
           receivedSize = 0;
           fileMetaData = null;
 
-          if (handler) handler(true);
+          if (handler) handler({ res: true, id: completedId });
         } else {
           console.error(
             `[FILE_SENT] File incomplete! Expected: ${fileMetaData.size}, Got: ${receivedSize}`,
           );
-          if (handler) handler(false);
+          if (handler) handler({ res: false, id: completedId });
         }
         break;
     }
@@ -159,6 +178,7 @@ function sei(dc: RTCDataChannel, data: object) {
 }
 
 function lff(dc: RTCDataChannel) {
+  let lastProgressUpdate = 0;
   return listenForDataChannelMessage(dc, async (event) => {
     if (event.data instanceof ArrayBuffer) {
       const chunk = new Uint8Array(event.data);
@@ -177,10 +197,15 @@ function lff(dc: RTCDataChannel) {
     } else {
       console.log("non-binary message, skipping...");
     }
-    if (fileMetaData)
-      useFileTransferStore
-        .getState()
-        .setProgress((receivedSize / fileMetaData!.size) * 100);
+    if (fileMetaData) {
+      const now = Date.now();
+      if (now - lastProgressUpdate > 50 || receivedSize === fileMetaData.size) {
+        useFileTransferStore
+          .getState()
+          .setProgress((receivedSize / fileMetaData!.size) * 100);
+        lastProgressUpdate = now;
+      }
+    }
   });
 }
 
@@ -214,6 +239,7 @@ async function sf(dc: RTCDataChannel, file: File, onComplete?: () => void) {
   const reader = stream.getReader();
 
   let offset = 0;
+  let lastProgressUpdate = 0;
 
   try {
     while (true) {
@@ -237,13 +263,18 @@ async function sf(dc: RTCDataChannel, file: File, onComplete?: () => void) {
       );
       dc.send(buffer);
       offset += value.byteLength;
-      useFileTransferStore.getState().setProgress((offset / file.size) * 100);
+      
+      const now = Date.now();
+      if (now - lastProgressUpdate > 50 || offset === file.size) {
+        useFileTransferStore.getState().setProgress((offset / file.size) * 100);
+        lastProgressUpdate = now;
+      }
     }
 
     if (offset === file.size) {
       console.log("[SEND FILE] Transfer complete! Sending FILE_SENT");
-      if (onComplete) onComplete();
       sei(dc, { name: "FILE_SENT", message: "File sent successfully!" });
+      if (onComplete) onComplete();
     } else {
       console.error(
         `[SEND FILE] Transfer incomplete: ${offset}/${file.size} bytes`,

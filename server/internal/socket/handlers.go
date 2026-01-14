@@ -106,5 +106,17 @@ func sendSessionDescription(eventName string, payload SessionDescriptionPayload,
 }
 
 func deleteRoom(pairingId string) {
+	if clients, ok := (*rooms)[pairingId]; ok {
+		res := SocketResponse{
+			EventName: "room_deleted",
+			Success:   true,
+			Message:   "Room has been deleted",
+		}
+		for _, client := range clients {
+			sendEvent(client.Conn, res)
+		}
+	} else {
+		log.Println("No clients found for room:", pairingId)
+	}
 	delete(*rooms, pairingId)
 }

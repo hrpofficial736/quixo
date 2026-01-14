@@ -9,7 +9,7 @@ export default function FileTransferRequestComponent({
   handler,
 }: {
   info: FileTransferMetaDataRequestInterface;
-  handler: (accepted: boolean) => void;
+  handler: (accepted: boolean, id: string) => void;
 }) {
   return (
     <div
@@ -41,7 +41,7 @@ export default function FileTransferRequestComponent({
       {/* ACTION BUTTONS */}
       <div className="flex w-full sm:w-auto gap-2 sm:gap-3">
         <button
-          onClick={() => handler(true)}
+          onClick={() => handler(true, info.id!)}
           className="flex-1 sm:flex-none
                      bg-bgTertiary/10
                      text-success/80 font-semibold
@@ -56,7 +56,7 @@ export default function FileTransferRequestComponent({
         </button>
 
         <button
-          onClick={() => handler(false)}
+          onClick={() => handler(false, info.id!)}
           className="flex-1 sm:flex-none
                      bg-bgTertiary/10
                      text-error font-semibold

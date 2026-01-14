@@ -6,20 +6,19 @@ export default function TransferProgressComponent({
   current,
 }: {
   percentage: number;
-  current: boolean;
+  current: "START" | "WAIT" | "STOP";
 }) {
   const [progress, setProgress] = useState<number>(percentage);
 
   useEffect(() => {
     const updatePercentage = () => {
-      console.log(percentage);
       setProgress(percentage);
     };
     updatePercentage();
   }, [percentage]);
   return (
     <>
-      {current ? (
+      {current === "START" ? (
         <div className="flex flex-col gap-0.5">
           <div className="text-xs font-medium self-end">{progress} %</div>
           <div className="relative w-30 h-2.5 bg-bgTertiary/40 rounded-full">
