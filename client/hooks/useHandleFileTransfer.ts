@@ -36,8 +36,12 @@ export default function useHandleFileTransfer() {
   );
 
   const sendFile = useCallback(
-    (dc: RTCDataChannel, file: File, handler?: () => void) =>
-      sf(dc, file, handler),
+    (
+      dc: RTCDataChannel,
+      file: File,
+      signal?: AbortSignal,
+      onComplete?: () => void,
+    ) => sf(dc, file, signal, onComplete),
     [],
   );
 
@@ -97,13 +101,17 @@ function lfei(
         );
         if (handler) handler({ res: accepted, id: dataObject["id"] });
         break;
+      
+      case "FILE_TRANSFER_CANCELLED":
+        console.log("[FILE_TRANSFER_CANCELLED] Received cancellation");
+        if (handler) handler({ id: dataObject["id"], res: true });
+        break;
 
       case "META":
         // Reset buffers for new file transfer
         receivedBuffers.length = 0;
         receivedSize = 0;
 
-        toast.success("File transfer request received");
         fileMetaData = {
           id: dataObject["id"],
           name: dataObject["fileName"],
@@ -209,7 +217,12 @@ function lff(dc: RTCDataChannel) {
   });
 }
 
-async function sf(dc: RTCDataChannel, file: File, onComplete?: () => void) {
+async function sf(
+  dc: RTCDataChannel,
+  file: File,
+  signal?: AbortSignal,
+  onComplete?: () => void,
+) {
   if (!dc) {
     console.error("[SEND FILE] No data channel found!");
     return;
@@ -243,6 +256,11 @@ async function sf(dc: RTCDataChannel, file: File, onComplete?: () => void) {
 
   try {
     while (true) {
+      if (signal?.aborted) {
+        console.log("[SEND FILE] Transfer aborted by user");
+        return; // Exit immediately
+      }
+
       if (dc.bufferedAmount > 64 * 1024) {
         await new Promise((r) => setTimeout(r, 10));
         continue;

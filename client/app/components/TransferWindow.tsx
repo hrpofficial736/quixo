@@ -39,6 +39,7 @@ export default function TransferWindow({
   // const transferQueue = useRef<TransferInterface[]>([]); // Removed in favor of state+ref pattern
   // const activeTransferId = useRef<string | null>(null); // Unused
   const isTransferringRef = useRef(false);
+  const activeAbortController = useRef<AbortController | null>(null);
 
   const handleResponse = (res: boolean, id: string) => {
     sendExtraInfo(datachannel!, {
@@ -62,6 +63,27 @@ export default function TransferWindow({
           },
         ];
       });
+    }
+  };
+
+  const handleCancel = (id: string) => {
+    // 1. Remove from UI immediately
+    setTransfers((prev) => prev.filter((t) => t.id !== id));
+
+    // 2. Notify Peer
+    sendExtraInfo(datachannel!, {
+      name: "FILE_TRANSFER_CANCELLED",
+      id,
+    });
+
+    // 3. Abort if active (Sender side mostly, but Receiver uses this to stop download stream effectively??
+    // Actually receiver doesn't have an abort controller for download listener...
+    // but the sender aborting will stop the stream.)
+    // However, if WE are the Sender and we click cancel:
+    const active = transfersRef.current.find((t) => t.current === "START");
+    if (active && active.id === id) {
+      activeAbortController.current?.abort();
+      isTransferringRef.current = false;
     }
   };
 
@@ -114,40 +136,69 @@ export default function TransferWindow({
 
       // Check if this is a "Start Signal" for an existing transfer (Receiver side)
       // Read from ref to avoid dependency loop
-      const isExistingTransfer = transfersRef.current.some(t => t.id === data.id);
-      
+      const isExistingTransfer = transfersRef.current.some(
+        (t) => t.id === data.id,
+      );
+
       if (isExistingTransfer) {
-         console.log("Receiver: Start Signal recognized for:", data.name);
-         setTransfers((prev) => prev.map(t => t.id === data.id ? { ...t, current: "START" } : t));
-         return; 
+        console.log("Receiver: Start Signal recognized for:", data.name);
+        setTransfers((prev) =>
+          prev.map((t) => (t.id === data.id ? { ...t, current: "START" } : t)),
+        );
+        return;
       }
 
       // Otherwise, it's a new request
       setRequests((prev) => {
-          if (prev.some(r => r.id === data.id)) return prev;
-          return [
-            ...prev,
-            {
-              id: data.id,
-              name: data.name,
-              size: data.size,
-              chunkSize: 16384,
-              mime: data.mime,
-            },
-          ];
+        if (prev.some((r) => r.id === data.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: data.id,
+            name: data.name,
+            size: data.size,
+            chunkSize: 16384,
+            mime: data.mime,
+          },
+        ];
       });
     });
     console.log(requests);
     return cleanup;
   }, [datachannel, listenForExtraInfo]); // Removed transfers from dependency!
 
+  // Event for cancellation
+  useEffect(() => {
+    const cleanup = listenForExtraInfo(
+      datachannel!,
+      "FILE_TRANSFER_CANCELLED",
+      (data) => {
+        if (!data || !data.id) return;
+        console.log("Peer cancelled transfer:", data.id);
+
+        // Remove from list
+        setTransfers((prev) => prev.filter((t) => t.id !== data.id));
+
+        // Abort if active
+        // Only relevant if WE are sending and THEY cancelled
+        const active = transfersRef.current.find((t) => t.current === "START");
+        if (active && active.id === data.id) {
+          activeAbortController.current?.abort();
+          isTransferringRef.current = false;
+          toast.error("Transfer cancelled by peer");
+        }
+      },
+    );
+    return cleanup;
+  }, [datachannel, listenForExtraInfo]);
+
   // Queue Processor
   useEffect(() => {
     // Only the SENDER runs this queue logic (indicated by filesRef presence)
     if (!filesRef.current) return;
-    
+
     if (isTransferringRef.current) return;
-    
+
     const nextTransfer = transfers.find((t) => t.current === "WAIT");
 
     if (nextTransfer && datachannel) {
@@ -168,21 +219,30 @@ export default function TransferWindow({
           chunkSize: nextTransfer.chunkSize,
         };
         useFileTransferStore.getState().setFileMetadata(fileInfo);
-        
+
         // RESEND META to reset context on Receiver for this specific file
-        console.log("Resending META for context before start:", nextTransfer.id);
-        sendExtraInfo(datachannel, { 
-            name: "META", 
-            id: nextTransfer.id,
-            fileName: nextTransfer.name,
-            size: nextTransfer.size,
-            mime: nextTransfer.mime,
-            chunkSize: nextTransfer.chunkSize
+        console.log(
+          "Resending META for context before start:",
+          nextTransfer.id,
+        );
+        sendExtraInfo(datachannel, {
+          name: "META",
+          id: nextTransfer.id,
+          fileName: nextTransfer.name,
+          size: nextTransfer.size,
+          mime: nextTransfer.mime,
+          chunkSize: nextTransfer.chunkSize,
         });
 
+        // Setup AbortController
+        const controller = new AbortController();
+        activeAbortController.current = controller;
+
         // Small delay to ensure META arrives before bytes? usually ordered on DataChannel
-        sendFile(datachannel, file, () => {
+        sendFile(datachannel, file, controller.signal, () => {
           isTransferringRef.current = false;
+          activeAbortController.current = null;
+          // Only remove if it hasn't been cancelled/removed already
           setTransfers((prev) => prev.filter((t) => t.id !== nextTransfer.id));
         });
       } else {
@@ -206,9 +266,7 @@ export default function TransferWindow({
       if (data.res) {
         // Mark the specific transfer as 'WAIT' so the effect picks it up
         setTransfers((prev) =>
-          prev.map((t) =>
-            t.id === data.id ? { ...t, current: "WAIT" } : t,
-          ),
+          prev.map((t) => (t.id === data.id ? { ...t, current: "WAIT" } : t)),
         );
       } else {
         setTransfers((prev) => {
@@ -228,10 +286,17 @@ export default function TransferWindow({
       console.log("inside file transfer completion listener!");
 
       if (data.res) {
-        toast.success("File received successfully!");
-        setTransfers((prev) =>
-          prev.filter((transfer) => transfer.id !== data.id),
-        );
+        // Check if ID is provided (Receiver Cleanup Fix)
+        if (data.id) {
+          toast.success("File received successfully!");
+          setTransfers((prev) =>
+            prev.filter((transfer) => transfer.id !== data.id),
+          );
+        } else {
+          console.warn(
+            "FILE_SENT received without ID, cannot clean up specific file.",
+          );
+        }
       } else {
         toast.error("Error sending full file!");
       }
@@ -252,6 +317,7 @@ export default function TransferWindow({
           header="File Transfer"
           extraClass="w-full h-full"
           onClose={onClose}
+          showClose={false}
         >
           <div className="text-textSecondary w-full h-[90%] mt-10 flex flex-col gap-2 overflow-y-scroll">
             {/*Connected Devices*/}
@@ -307,6 +373,7 @@ export default function TransferWindow({
                   <FileTransferProgressComponent
                     key={transfer.id}
                     fileInfo={transfer}
+                    onCancel={handleCancel}
                   />
                 );
               })}

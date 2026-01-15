@@ -40,6 +40,7 @@ export default function ConnectionWindow({
       pairingId,
     });
   };
+  
 
   useEffect(() => {
     const checkIfPaired = () => {
@@ -66,7 +67,12 @@ export default function ConnectionWindow({
   return (
     <AnimatePresence>
       {isOpen && (
-        <Window onClose={onCloseAction} header="Connect" extraClass="w-[80%]">
+        <Window
+          showClose={true}
+          onClose={onCloseAction}
+          header="Connect"
+          extraClass="w-[80%]"
+        >
           <AnimatePresence mode="wait">
             {proceedToConnectionOptions ? (
               <motion.div
