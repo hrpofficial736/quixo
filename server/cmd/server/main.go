@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/hrpofficial736/quixo/server/internal/socket"
 )
@@ -10,5 +11,10 @@ import (
 func main() {
 	http.HandleFunc("/", socket.WebsocketHandler)
 	log.Println("Websocket server is running at port 5000...")
-	log.Fatal(http.ListenAndServe(":5000", nil))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "5000"
+	}
+
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
