@@ -67,7 +67,6 @@ function lfei(
       | ExtraInfoHandlerParamsInterface,
   ) => void,
 ) {
-  console.log(`Setting up listener for: ${eventName}`);
   return listenForDataChannelMessage(dc, (event) => {
     if (!event) {
       console.error("No event found!");
@@ -90,20 +89,16 @@ function lfei(
       return;
     }
 
-    console.log(`[${eventName}] Message received:`, dataObject);
 
     switch (eventName) {
       case "METADATA-ACK":
         // Check the actual response value
         const accepted = dataObject["res"] === "ACC";
-        console.log(
-          `[METADATA-ACK] Response: ${accepted ? "ACCEPTED" : "REJECTED"}`,
-        );
+        
         if (handler) handler({ res: accepted, id: dataObject["id"] });
         break;
       
       case "FILE_TRANSFER_CANCELLED":
-        console.log("[FILE_TRANSFER_CANCELLED] Received cancellation");
         if (handler) handler({ id: dataObject["id"], res: true });
         break;
 
@@ -120,17 +115,13 @@ function lfei(
           mime: dataObject["mime"],
         };
 
-        console.log("[META] File metadata received:", fileMetaData);
         if (handler) {
           handler(fileMetaData);
         }
         break;
 
       case "FILE_SENT":
-        console.log("[FILE_SENT] Transfer complete signal received");
-        console.log(
-          `Expected: ${fileMetaData?.size}, Received: ${receivedSize}`,
-        );
+        
 
         if (!fileMetaData) {
           console.error("[FILE_SENT] File metadata is missing!");
@@ -142,7 +133,6 @@ function lfei(
         const completedId = fileMetaData.id; // Capture ID
 
         if (receivedSize > 0 && isComplete && receivedBuffers.length > 0) {
-          console.log("[FILE_SENT] Creating blob and downloading...");
           const blob = new Blob(receivedBuffers, { type: fileMetaData.mime });
           downloadBlob(blob, fileMetaData.name);
 
@@ -181,7 +171,6 @@ function sei(dc: RTCDataChannel, data: object) {
     return;
   }
 
-  console.log("[SEND INFO] Sending:", data);
   dc.send(JSON.stringify(data));
 }
 
@@ -203,7 +192,6 @@ function lff(dc: RTCDataChannel) {
       receivedBuffers.push(chunk);
       receivedSize += chunk.byteLength;
     } else {
-      console.log("non-binary message, skipping...");
     }
     if (fileMetaData) {
       const now = Date.now();
@@ -241,12 +229,7 @@ async function sf(
     return;
   }
 
-  console.log(
-    "[SEND FILE] Starting transfer for:",
-    file.name,
-    "size:",
-    file.size,
-  );
+ 
 
   const stream = file.stream();
   const reader = stream.getReader();
@@ -257,7 +240,6 @@ async function sf(
   try {
     while (true) {
       if (signal?.aborted) {
-        console.log("[SEND FILE] Transfer aborted by user");
         return; // Exit immediately
       }
 
@@ -290,7 +272,6 @@ async function sf(
     }
 
     if (offset === file.size) {
-      console.log("[SEND FILE] Transfer complete! Sending FILE_SENT");
       sei(dc, { name: "FILE_SENT", message: "File sent successfully!" });
       if (onComplete) onComplete();
     } else {

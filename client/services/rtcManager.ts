@@ -22,13 +22,11 @@ function createNewRTCPeerConnection(onCloseHandler: () => void) {
   });
 
   pc.onconnectionstatechange = () => {
-    console.log("connection state changed: ", pc.connectionState);
     if (
       pc.connectionState === "disconnected" ||
       pc.connectionState === "closed"
     ) {
       if (onCloseHandler) {
-        console.log("disconnected handler called!");
         onCloseHandler();
       }
 
@@ -42,12 +40,7 @@ function createNewRTCPeerConnection(onCloseHandler: () => void) {
       candidateQueues = new WeakMap<RTCPeerConnection, RTCIceCandidate[]>();
     }
   };
-  pc.oniceconnectionstatechange = () => {
-    console.log("ICE:", pc.iceConnectionState);
-  };
-  pc.onicegatheringstatechange = () => {
-    console.log("ICE gathering:", pc.iceGatheringState);
-  };
+  
 
   useWebRTCConnectionStore.getState().setPC(pc);
 
@@ -70,7 +63,6 @@ async function addIceCandidate(
   candidate: RTCIceCandidate,
 ) {
   if (!candidate) {
-    console.log("End of candidates (null candidate)");
     return;
   }
 
@@ -107,7 +99,6 @@ async function createOffer(
 ) {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  console.log("offer created: ", offer);
   handler(offer);
 }
 
@@ -116,7 +107,6 @@ async function createAnswer(
   offer: RTCSessionDescriptionInit,
   handler: (answer: RTCSessionDescriptionInit) => void,
 ) {
-  console.log(offer);
   if (!pc || pc.signalingState !== "stable") return;
   await pc.setRemoteDescription(offer);
   const queue = candidateQueues.get(pc);
@@ -132,7 +122,6 @@ async function createAnswer(
   }
 
   const answer = await pc.createAnswer();
-  console.log("answer created: ", answer);
   if (pc.signalingState === "stable") {
     return;
   }
@@ -169,7 +158,6 @@ function createDataChannel(pc: RTCPeerConnection, handler?: () => void) {
   const dataChannel = pc.createDataChannel("file-transfer");
   dataChannel.onopen = () => {
     useWebRTCConnectionStore.getState().setDataChannel(dataChannel);
-    console.log("data channel is open now!");
     if (handler) handler();
   };
 }
@@ -179,7 +167,6 @@ function listenForDataChannel(pc: RTCPeerConnection, handler: () => void) {
     const channel = event.channel;
     channel.onopen = () => {
       useWebRTCConnectionStore.getState().setDataChannel(channel);
-      console.log("data channel is open now!");
       handler();
     };
   };

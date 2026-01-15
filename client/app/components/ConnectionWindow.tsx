@@ -32,7 +32,6 @@ export default function ConnectionWindow({
     const { url, pairingId } = await res.json();
     setUser({ deviceName: name });
     setRedirectUrl(url);
-    console.log(url);
     setProceedToConnectionOptions(true);
     execute({
       deviceName: name,
@@ -40,7 +39,7 @@ export default function ConnectionWindow({
       pairingId,
     });
   };
-  
+
 
   useEffect(() => {
     const checkIfPaired = () => {

@@ -78,7 +78,6 @@ function handlePairWithOtherDevice(
       navigateToTransferWindowSetter(false);
       return;
     }
-    console.log(res.data);
     useUserStore.getState().setUser({
       id: res.data["id"] as string,
       pairingId: id,
@@ -130,12 +129,10 @@ function handlePairWithOtherDevice(
       if (remoteDescriptionSet) {
         sendIceCandidate(candidate);
       } else {
-        console.log("queueing candidate, waiting for remote description");
         outgoingCandidatesQueue.push(candidate);
       }
     });
     listenForDataChannel(pc, () => {
-      console.log("data channel opened!");
       navigateToTransferWindowSetter(true);
     });
     listenEvent("offer", (params) => {
@@ -179,14 +176,12 @@ function handlePairWithOtherDevice(
       const candidate = params.data["candidate"] as RTCIceCandidate | null;
 
       if (candidate) {
-        console.log("received ICE candidates from other client!");
         addIceCandidate(pc, candidate);
       }
     });
 
     listenEvent("room_deleted", (params) => {
       if (params.success) {
-        console.log("Room deleted event received! Disconnecting...");
         disconnect();
         useWebRTCConnectionStore.getState().closePC();
       }

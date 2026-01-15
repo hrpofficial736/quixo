@@ -23,7 +23,6 @@ function createSocket(onOpenHandler: (ws: WebSocket) => void) {
   );
 
   socket.onopen = () => {
-    console.log("websocket connected!");
     onOpenHandler(socket!);
   };
 
@@ -36,7 +35,6 @@ function createSocket(onOpenHandler: (ws: WebSocket) => void) {
       const { eventName, data, success, message } = JSON.parse(event.data);
       dispatch(eventName, { eventName, data, success, message });
     } catch (e) {
-      console.log("invalid websocket message...: ", e);
     }
   };
   return socket;
@@ -47,7 +45,6 @@ const getSocket = () => socket;
 function emitEvent(ws: WebSocket, event: string, data: object) {
   try {
     if (ws) {
-      console.log(ws.readyState);
       if (ws.readyState !== WebSocket.OPEN) {
         console.error("socket is not ready");
         return;
@@ -62,7 +59,6 @@ function emitEvent(ws: WebSocket, event: string, data: object) {
       console.error("no websocket found!");
     }
   } catch (e) {
-    console.log(e);
   }
 }
 

@@ -20,7 +20,6 @@ export default function TransferPage() {
   const status = useConnectionStatusStore((state) => state.status);
   useEffect(() => {
     const checkWhichPageToShow = () => {
-      console.log(status);
       if (status !== "CONNECTED") {
         setPageToShow("NAME_PROMPT");
         return;

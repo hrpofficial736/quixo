@@ -47,9 +47,7 @@ export default function TransferWindow({
       id,
       res: res ? "ACC" : "REJ",
     });
-    console.log(requests);
     setRequests((prev) => {
-      console.log(prev.filter((request) => request.id !== id));
       return prev.filter((request) => request.id !== id);
     });
     if (res) {
@@ -89,7 +87,6 @@ export default function TransferWindow({
 
   const handleFileChange = () => {
     if (!fileInputRef.current || !fileInputRef.current.files) return;
-    console.log(fileInputRef.current.files);
     for (const file of fileInputRef.current.files) {
       const fileInfo = {
         name: "META",
@@ -104,7 +101,6 @@ export default function TransferWindow({
         filesRef.current = new Map();
       }
       filesRef.current.set(fileInfo.id, file);
-      console.log("file info going in META is: ", fileInfo);
       setTransfers((prev) => [
         ...prev,
         {
@@ -116,7 +112,6 @@ export default function TransferWindow({
           current: "STOP",
         },
       ]);
-      console.log(transfers);
       sendExtraInfo(datachannel!, fileInfo);
     }
   };
@@ -130,9 +125,7 @@ export default function TransferWindow({
   // Event for listening file metadata on receiver end
   useEffect(() => {
     const cleanup = listenForExtraInfo(datachannel!, "META", (info) => {
-      console.log("info coming in META is: ", info);
       const data = info as FileTransferMetaDataRequestInterface;
-      console.log(info, data);
 
       // Check if this is a "Start Signal" for an existing transfer (Receiver side)
       // Read from ref to avoid dependency loop
@@ -141,7 +134,6 @@ export default function TransferWindow({
       );
 
       if (isExistingTransfer) {
-        console.log("Receiver: Start Signal recognized for:", data.name);
         setTransfers((prev) =>
           prev.map((t) => (t.id === data.id ? { ...t, current: "START" } : t)),
         );
@@ -163,7 +155,6 @@ export default function TransferWindow({
         ];
       });
     });
-    console.log(requests);
     return cleanup;
   }, [datachannel, listenForExtraInfo]); // Removed transfers from dependency!
 
@@ -174,7 +165,6 @@ export default function TransferWindow({
       "FILE_TRANSFER_CANCELLED",
       (data) => {
         if (!data || !data.id) return;
-        console.log("Peer cancelled transfer:", data.id);
 
         // Remove from list
         setTransfers((prev) => prev.filter((t) => t.id !== data.id));
@@ -221,10 +211,7 @@ export default function TransferWindow({
         useFileTransferStore.getState().setFileMetadata(fileInfo);
 
         // RESEND META to reset context on Receiver for this specific file
-        console.log(
-          "Resending META for context before start:",
-          nextTransfer.id,
-        );
+        
         sendExtraInfo(datachannel, {
           name: "META",
           id: nextTransfer.id,
@@ -256,12 +243,10 @@ export default function TransferWindow({
   // Event for listening file metadata acknowledgement on sender end
   useEffect(() => {
     const cleanup = listenForExtraInfo(datachannel!, "METADATA-ACK", (data) => {
-      console.log(data);
       if (!data || !("res" in data) || !data.id) return;
       // Use ref to check length/existence to avoid re-binding
       if (!filesRef.current || transfersRef.current.length === 0) return;
 
-      console.log("data coming in METADATA-ACK response is: ", data);
 
       if (data.res) {
         // Mark the specific transfer as 'WAIT' so the effect picks it up
@@ -283,7 +268,6 @@ export default function TransferWindow({
     const cleanup = listenForExtraInfo(datachannel!, "FILE_SENT", (data) => {
       if (!data) return;
       if (!("res" in data)) return;
-      console.log("inside file transfer completion listener!");
 
       if (data.res) {
         // Check if ID is provided (Receiver Cleanup Fix)

@@ -54,7 +54,6 @@ const handleNameSubmit = (
   });
 
   listenEvent("ready_to_pair", (params) => {
-    console.log("event listened: ", params);
     if (params.success) {
       readyToPairSetter("READY_TO_PAIR");
       useUserStore.getState().setUser({
@@ -62,7 +61,6 @@ const handleNameSubmit = (
         pairingId: data.pairingId,
         status: "WAITING",
       });
-      console.log("ready to pair");
     } else {
       readyToPairSetter("FAILED");
     }
@@ -118,12 +116,10 @@ const handleNameSubmit = (
       if (remoteDescriptionSet) {
         sendIceCandidate(candidate);
       } else {
-        console.log("Queueing ICE candidate (waiting for remote description)");
         outgoingCandidateQueue.push(candidate);
       }
     });
     createDataChannel(pc, () => {
-      console.log("incoming data channel opened, connection ready!");
       connectionStatusSetter(true);
     });
 
@@ -172,7 +168,6 @@ const handleNameSubmit = (
 
     listenEvent("room_deleted", (params) => {
       if (params.success) {
-        console.log("Room deleted event received! Disconnecting...");
         // Force cleanup immediately
         disconnect();
         // Also ensure PC is closed
