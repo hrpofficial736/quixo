@@ -70,7 +70,7 @@ export default function ConnectionWindow({
           showClose={true}
           onClose={onCloseAction}
           header="Connect"
-          extraClass="w-[80%]"
+          extraClass="xl:w-[40%] sm:w-[90%] w-full"
         >
           <AnimatePresence mode="wait">
             {proceedToConnectionOptions ? (

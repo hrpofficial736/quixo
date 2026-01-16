@@ -7,6 +7,8 @@ import { poppins } from "../fonts";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/useUserStore";
 import { useConnectionStatusStore } from "@/stores/useConnectionStatusStore";
+import { useAppSocket } from "@/context/SocketContext";
+import LoadingPage from "@/components/LoadingPage";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -22,6 +24,10 @@ export default function LandingPage() {
     useConnectionStatusStore.getState().setStatus("CONNECTED");
     router.push(`/${id}`);
   };
+
+  const socket = useAppSocket();
+
+  if (!socket || !socket.OPEN) return <LoadingPage />
 
   return (
     <div className={`w-screen h-screen bg-bgPrimary ${poppins.className}`}>

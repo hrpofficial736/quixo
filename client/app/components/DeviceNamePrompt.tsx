@@ -9,7 +9,7 @@ export default function DeviceNamePrompt({
   onSubmit: (name: string) => void;
 }) {
   const [name, setName] = useState<string>("");
-
+  const [loading, setLoading] = useState<boolean>(false);
   return (
     <div className="f-c-col w-full py-7 px-4 mt-10 overflow-hidden">
       <h1 className="text-sm sm:text-lg font-semibold text-textTertiary">
@@ -24,15 +24,18 @@ export default function DeviceNamePrompt({
       />
       <button
         onClick={() => {
+          setLoading(true)
           if (name.trim() == "") {
             toast.error("Please enter your device name first!");
+            setLoading(false)
             return;
           }
           onSubmit(name);
+          setLoading(false);
         }}
-        className="px-7 py-3 active:scale-[0.98] transition-all bg-textSecondary mt-7 cursor-pointer rounded-full text-sm sm:text-lg font-semibold f-c-row mt-5"
+        className={`${!loading ? "bg-textSecondary" : "bg-bgSecondary text-textTertiary"} px-7 py-3 active:scale-[0.98] transition-all mt-7 cursor-pointer rounded-full text-sm sm:text-lg font-semibold f-c-row`}
       >
-        Proceed
+        {loading ? "Please wait..." : "Proceed"}
       </button>
     </div>
   );

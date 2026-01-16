@@ -4,6 +4,8 @@ import { useState } from "react";
 import { MdOutlineContentCopy } from "react-icons/md";
 import { MdDone } from "react-icons/md";
 import QRCode from "react-qr-code";
+
+
 export default function ConnectionOptions({ url }: { url: string }) {
   const [copied, setCopied] = useState<boolean>(false);
   return (
@@ -20,11 +22,11 @@ export default function ConnectionOptions({ url }: { url: string }) {
 
         <div className="text-bgTertiary">or</div>
 
-        <h1 className="text-textTertiary text-[10px] sm:text-[14px] font-semibold">
+        <h1 className="text-textTertiary text-sm text-center sm:text-[14px] font-semibold">
           Copy and paste this link in other device
         </h1>
         <div className="f-c-row gap-4">
-          <div className="text-sm max-sm:hidden font-bold text-textSecondary">
+          <div className="text-sm max-sm:hidden font-bold text-textSecondary truncate">
             {url}
           </div>
           <div
