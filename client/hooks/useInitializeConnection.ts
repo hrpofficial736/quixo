@@ -119,7 +119,7 @@ const handleNameSubmit = (
         outgoingCandidateQueue.push(candidate);
       }
     });
-    createDataChannel(pc, () => {
+    createDataChannel(pc, "control", () => {
       connectionStatusSetter(true);
     });
 

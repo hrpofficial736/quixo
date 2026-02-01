@@ -17,7 +17,7 @@ export default function socketManager() {
   };
 }
 
-function createSocket(onOpenHandler: (ws: WebSocket) => void) {
+function createSocket(onOpenHandler: (ws: WebSocket) => void, errorHandler: () => void) {
   socket = new WebSocket(
     `${process.env.NEXT_PUBLIC_SERVER_URL}`,
   );
@@ -27,7 +27,7 @@ function createSocket(onOpenHandler: (ws: WebSocket) => void) {
   };
 
   socket.onerror = (e) => {
-    console.error("websocket error: ", e);
+    errorHandler();
   };
 
   socket.onmessage = (event) => {

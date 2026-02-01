@@ -3,6 +3,7 @@ import FileTransferRequestComponent from "@/components/FileTransferRequestCompon
 import Window from "@/components/Window";
 import { useAppSocket } from "@/context/SocketContext";
 import useHandleFileTransfer from "@/hooks/useHandleFileTransfer";
+import rtcManager from "@/services/rtcManager";
 import socketManager from "@/services/socketManager";
 import { useFileTransferStore } from "@/stores/useFileTransferStore";
 import { useUserStore } from "@/stores/useUserStore";
@@ -22,27 +23,50 @@ export default function TransferWindow({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  // Reference to input element with type file
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Service Managers
   const { emitEvent } = socketManager();
+  const { createDataChannel } = rtcManager();
+
+  // Global App Socket
   const socket = useAppSocket();
-  const { datachannel, closePC } = useWebRTCConnectionStore();
+
+  // Web RTC store for peer connections and data channels
+  const {
+    controlDatachannel,
+    setFileDataChannels,
+    closeFileDataChannel,
+    closePC,
+    pc,
+  } = useWebRTCConnectionStore();
+
+  // State to keep current pending requests
   const [requests, setRequests] = useState<
     FileTransferMetaDataRequestInterface[]
   >([]);
+
+  // Main hook for using functions to send/listen the files/metadata
   const { sendFile, sendExtraInfo, listenForExtraInfo, listenForFile } =
     useHandleFileTransfer();
 
+  // Reference of files with their id
   const filesRef = useRef<Map<string, File> | null>(null);
 
+  // State to keep all the current transfers
   const [transfers, setTransfers] = useState<TransferInterface[]>([]);
 
-  // const transferQueue = useRef<TransferInterface[]>([]); // Removed in favor of state+ref pattern
-  // const activeTransferId = useRef<string | null>(null); // Unused
+  // Reference of current transfer state
   const isTransferringRef = useRef(false);
+
+  // Reference of abort controller to abort an operation
   const activeAbortController = useRef<AbortController | null>(null);
 
+  // Handler for handling Accept/Reject choice for a file by the user
   const handleResponse = (res: boolean, id: string) => {
-    sendExtraInfo(datachannel!, {
+    if (!controlDatachannel) return;
+    sendExtraInfo(controlDatachannel, {
       name: "METADATA-ACK",
       id,
       res: res ? "ACC" : "REJ",
@@ -64,12 +88,14 @@ export default function TransferWindow({
     }
   };
 
+  // Handler for handling cancel for a specific transfer
   const handleCancel = (id: string) => {
+    if (!controlDatachannel) return;
     // 1. Remove from UI immediately
     setTransfers((prev) => prev.filter((t) => t.id !== id));
 
     // 2. Notify Peer
-    sendExtraInfo(datachannel!, {
+    sendExtraInfo(controlDatachannel, {
       name: "FILE_TRANSFER_CANCELLED",
       id,
     });
@@ -83,14 +109,22 @@ export default function TransferWindow({
       activeAbortController.current?.abort();
       isTransferringRef.current = false;
     }
+    closeFileDataChannel(id);
   };
 
+  // Handler for handling files input selection and sending metadata
   const handleFileChange = () => {
-    if (!fileInputRef.current || !fileInputRef.current.files) return;
+    if (
+      !fileInputRef.current ||
+      !fileInputRef.current.files ||
+      !pc ||
+      !controlDatachannel
+    )
+      return;
     for (const file of fileInputRef.current.files) {
       const fileInfo = {
-        name: "META",
         id: crypto.randomUUID(),
+        name: "META",
         fileName: file.name,
         size: file.size,
         mime: file.type,
@@ -112,7 +146,7 @@ export default function TransferWindow({
           current: "STOP",
         },
       ]);
-      sendExtraInfo(datachannel!, fileInfo);
+      sendExtraInfo(controlDatachannel, fileInfo);
     }
   };
 
@@ -124,7 +158,8 @@ export default function TransferWindow({
 
   // Event for listening file metadata on receiver end
   useEffect(() => {
-    const cleanup = listenForExtraInfo(datachannel!, "META", (info) => {
+    if (!controlDatachannel) return;
+    const cleanup = listenForExtraInfo(controlDatachannel, "META", (info) => {
       const data = info as FileTransferMetaDataRequestInterface;
 
       // Check if this is a "Start Signal" for an existing transfer (Receiver side)
@@ -156,12 +191,13 @@ export default function TransferWindow({
       });
     });
     return cleanup;
-  }, [datachannel, listenForExtraInfo]); // Removed transfers from dependency!
+  }, [controlDatachannel, listenForExtraInfo]); // Removed transfers from dependency!
 
   // Event for cancellation
   useEffect(() => {
+    if (!controlDatachannel) return;
     const cleanup = listenForExtraInfo(
-      datachannel!,
+      controlDatachannel,
       "FILE_TRANSFER_CANCELLED",
       (data) => {
         if (!data || !data.id) return;
@@ -180,7 +216,7 @@ export default function TransferWindow({
       },
     );
     return cleanup;
-  }, [datachannel, listenForExtraInfo]);
+  }, [controlDatachannel, listenForExtraInfo]);
 
   // Queue Processor
   useEffect(() => {
@@ -189,9 +225,11 @@ export default function TransferWindow({
 
     if (isTransferringRef.current) return;
 
+    if (!pc || !controlDatachannel) return;
+
     const nextTransfer = transfers.find((t) => t.current === "WAIT");
 
-    if (nextTransfer && datachannel) {
+    if (nextTransfer && controlDatachannel) {
       isTransferringRef.current = true;
       // Mark as started in UI
       setTransfers((prev) =>
@@ -211,8 +249,8 @@ export default function TransferWindow({
         useFileTransferStore.getState().setFileMetadata(fileInfo);
 
         // RESEND META to reset context on Receiver for this specific file
-        
-        sendExtraInfo(datachannel, {
+
+        sendExtraInfo(controlDatachannel, {
           name: "META",
           id: nextTransfer.id,
           fileName: nextTransfer.name,
@@ -225,8 +263,17 @@ export default function TransferWindow({
         const controller = new AbortController();
         activeAbortController.current = controller;
 
+        const fileDatachannels =
+          useWebRTCConnectionStore.getState().fileDatachannels;
+
+        const fileChannel = fileDatachannels.find(
+          (channel) => channel.label === `file-${nextTransfer.id}`,
+        );
+        console.log("this is the filechannel: ", fileChannel);
+        if (!fileChannel) return;
         // Small delay to ensure META arrives before bytes? usually ordered on DataChannel
-        sendFile(datachannel, file, controller.signal, () => {
+        sendFile(fileChannel, file, controller.signal, () => {
+          console.log("SEND FILE callback");
           isTransferringRef.current = false;
           activeAbortController.current = null;
           // Only remove if it hasn't been cancelled/removed already
@@ -238,61 +285,77 @@ export default function TransferWindow({
         setTransfers((prev) => prev.filter((t) => t.id !== nextTransfer.id));
       }
     }
-  }, [transfers, datachannel, sendFile, sendExtraInfo]);
+  }, [transfers, controlDatachannel, sendFile, sendExtraInfo, pc]);
 
   // Event for listening file metadata acknowledgement on sender end
   useEffect(() => {
-    const cleanup = listenForExtraInfo(datachannel!, "METADATA-ACK", (data) => {
-      if (!data || !("res" in data) || !data.id) return;
-      // Use ref to check length/existence to avoid re-binding
-      if (!filesRef.current || transfersRef.current.length === 0) return;
-
-
-      if (data.res) {
-        // Mark the specific transfer as 'WAIT' so the effect picks it up
-        setTransfers((prev) =>
-          prev.map((t) => (t.id === data.id ? { ...t, current: "WAIT" } : t)),
-        );
-      } else {
-        setTransfers((prev) => {
-          return prev.filter((transfer) => transfer.id !== data.id);
-        });
-        toast.error("File transfer request rejected by the receiver!");
-      }
-    });
+    if (!controlDatachannel) return;
+    const cleanup = listenForExtraInfo(
+      controlDatachannel,
+      "METADATA-ACK",
+      (data) => {
+        if (!data || !("res" in data) || !data.id || !pc) return;
+        // Use ref to check length/existence to avoid re-binding
+        if (!filesRef.current || transfersRef.current.length === 0) return;
+        console.log("METADATA-ACK received", data);
+        if (data.res) {
+          // Mark the specific transfer as 'WAIT' so the effect picks it up
+          setTransfers((prev) =>
+            prev.map((t) => (t.id === data.id ? { ...t, current: "WAIT" } : t)),
+          );
+          createDataChannel(pc, `file-${data.id}`, () => {
+            console.log("Data channel for file transfer opened");
+          });
+        } else {
+          setTransfers((prev) => {
+            return prev.filter((transfer) => transfer.id !== data.id);
+          });
+          toast.error("File transfer request rejected by the receiver!");
+        }
+      },
+    );
     return cleanup;
-  }, [datachannel, listenForExtraInfo]); // Removed transfers from dependency!
+  }, [controlDatachannel, listenForExtraInfo, createDataChannel, pc]);
 
   // Event for listening completion of file transfer on receiver end
   useEffect(() => {
-    const cleanup = listenForExtraInfo(datachannel!, "FILE_SENT", (data) => {
-      if (!data) return;
-      if (!("res" in data)) return;
-
-      if (data.res) {
-        // Check if ID is provided (Receiver Cleanup Fix)
-        if (data.id) {
-          toast.success("File received successfully!");
-          setTransfers((prev) =>
-            prev.filter((transfer) => transfer.id !== data.id),
-          );
+    if (!controlDatachannel) return;
+    const cleanup = listenForExtraInfo(
+      controlDatachannel,
+      "FILE_SENT",
+      (data) => {
+        if (!data) return;
+        if (!("res" in data)) return;
+        console.log("FILE_SENT received", data);
+        if (data.res) {
+          // Check if ID is provided (Receiver Cleanup Fix)
+          if (data.id) {
+            toast.success("File received successfully!");
+            setTransfers((prev) =>
+              prev.filter((transfer) => transfer.id !== data.id),
+            );
+          } else {
+            console.warn(
+              "FILE_SENT received without ID, cannot clean up specific file.",
+            );
+          }
         } else {
-          console.warn(
-            "FILE_SENT received without ID, cannot clean up specific file.",
-          );
+          toast.error("Error sending full file!");
         }
-      } else {
-        toast.error("Error sending full file!");
-      }
-    });
+      },
+    );
     return cleanup;
-  }, [datachannel]);
+  }, [controlDatachannel, listenForExtraInfo]);
 
   useEffect(() => {
-    if (!datachannel) return;
-    const cleanup = listenForFile(datachannel);
-    return cleanup;
-  }, [datachannel]);
+    const fileDatachannels =
+      useWebRTCConnectionStore.getState().fileDatachannels;
+    console.log("File datachannels", fileDatachannels);
+    fileDatachannels.forEach((channel) => {
+      console.log("File datachannel", channel);
+      listenForFile(channel);
+    });
+  }, [controlDatachannel, listenForFile, transfers, requests]);
 
   return (
     <div className="w-full h-full">
@@ -316,7 +379,11 @@ export default function TransferWindow({
 
                 <button
                   onClick={() => {
-                    datachannel?.close();
+                    useWebRTCConnectionStore
+                      .getState()
+                      .fileDatachannels.forEach((channel) => channel.close());
+                    setFileDataChannels(null);
+                    controlDatachannel?.close();
                     closePC();
                     emitEvent(socket!, "delete_room", {
                       pairingId: useUserStore.getState().pairingId,
@@ -358,6 +425,7 @@ export default function TransferWindow({
                     key={transfer.id}
                     fileInfo={transfer}
                     onCancel={handleCancel}
+                    isPaused={transfer.current === "WAIT"}
                   />
                 );
               })}

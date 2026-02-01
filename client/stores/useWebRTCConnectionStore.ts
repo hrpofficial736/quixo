@@ -3,8 +3,11 @@ import { create } from "zustand";
 type WebRTCConnectionStoreProps = {
   pc: RTCPeerConnection | null;
   setPC: (pc: RTCPeerConnection | null) => void;
-  datachannel: RTCDataChannel | null;
-  setDataChannel: (dc: RTCDataChannel | null) => void;
+  controlDatachannel: RTCDataChannel | null;
+  setControlDataChannel: (dc: RTCDataChannel | null) => void;
+  fileDatachannels: RTCDataChannel[];
+  setFileDataChannels: (dc: RTCDataChannel | null) => void;
+  closeFileDataChannel: (label: string) => void;
   closePC: () => void;
 };
 
@@ -12,14 +15,27 @@ export const useWebRTCConnectionStore = create<WebRTCConnectionStoreProps>(
   (set, get) => ({
     pc: null,
     setPC: (pc) => set({ pc }),
-    datachannel: null,
-    setDataChannel: (dc) => {
-      set({ datachannel: dc });
+    controlDatachannel: null,
+    setControlDataChannel: (dc) => {
+      set({ controlDatachannel: dc });
     },
     closePC: () => {
       const pc = get().pc;
       pc?.close();
       set({ pc: null });
+    },
+    fileDatachannels: [],
+    setFileDataChannels: (dc) => {
+      const existingChannels = get().fileDatachannels || [];
+      if (!dc) return;
+      set({ fileDatachannels: [...existingChannels, dc] });
+    },
+    closeFileDataChannel: (label) => {
+      const fileDatachannels = get().fileDatachannels;
+      const updatedChannels = fileDatachannels.filter(
+        (channel) => channel.label !== label,
+      );
+      set({ fileDatachannels: updatedChannels });
     },
   }),
 );

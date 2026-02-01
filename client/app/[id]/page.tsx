@@ -1,6 +1,5 @@
 "use client";
 
-import Window from "@/components/Window";
 import { poppins } from "../fonts";
 import { useEffect, useState } from "react";
 import DeviceNamePrompt from "../components/DeviceNamePrompt";
