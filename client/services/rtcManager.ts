@@ -38,6 +38,7 @@ function createNewRTCPeerConnection(onCloseHandler: () => void) {
       pc.close();
 
       candidateQueues = new WeakMap<RTCPeerConnection, RTCIceCandidate[]>();
+      
     }
   };
 

@@ -97,6 +97,9 @@ function handlePairWithOtherDevice(
       useConnectionStatusStore.setState(
         useConnectionStatusStore.getInitialState(),
       );
+      emitEvent(socket!, "delete_room", {
+        pairingId: useUserStore.getState().pairingId,
+      });
       router.push("/");
     };
 

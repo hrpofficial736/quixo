@@ -10,20 +10,27 @@ import { FaPause } from "react-icons/fa6";
 export default function FileTransferProgressComponent({
   fileInfo,
   onCancel,
-  isPaused,
+  onPause,
+  onResume,
 }: {
   fileInfo: TransferInterface;
   onCancel: (id: string) => void;
-  isPaused: boolean;
+  onPause: (id: string) => void;
+  onResume: (id: string) => void;
 }) {
-  const { progress } = useFileTransferStore();
-  const [fileProgress, setFileProgress] = useState<number>(0);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
 
+  // Read progress directly from store for this file
+  const fileState = useFileTransferStore((state) => state.files.get(fileInfo.id!));
+  const progress = fileState?.progress || 0;
+
+  // Sync local pause state with parent prop (optional but good for consistency)
   useEffect(() => {
-    if (fileInfo.current !== "START") return;
-    const updateProgress = () => setFileProgress(progress);
-    updateProgress();
-  }, [progress, fileInfo.current]);
+    const updateIsPaused = () => {
+      setIsPaused(fileInfo.current === "PAUSED");
+    }
+    updateIsPaused();
+  }, [fileInfo]);
 
   return (
     <div className="flex flex-col items-end">
@@ -44,17 +51,27 @@ export default function FileTransferProgressComponent({
 
         {/*Progress*/}
         <TransferProgressComponent
-          percentage={parseFloat(fileProgress.toFixed(2))}
+          percentage={parseFloat(progress.toFixed(2))}
           current={fileInfo.current}
         />
       </div>
 
       {/*Transfer Controls*/}
       <div className="rounded-2xl bg-bgTertiary/10 px-3 py-2 flex gap-2">
-        <button className="rounded-xl border border-textTertiary px-2 py-1">
+        {fileInfo.current !== "STOP" && <button
+          onClick={() => {
+            setIsPaused(!isPaused);
+            if (isPaused) {
+              onResume(fileInfo.id!);
+            } else {
+              onPause(fileInfo.id!);
+            }
+          }}
+          className="rounded-lg bg-bgSecondary border-2 cursor-pointer border-bgTertiary text-textTertiary font-semibold px-2 py-1 f-c-row gap-1"
+        >
           {isPaused ? <FaPlay /> : <FaPause />}
           {isPaused ? "Resume" : "Pause"}
-        </button>
+        </button>}
 
         <button
           onClick={() => onCancel(fileInfo.id!)}

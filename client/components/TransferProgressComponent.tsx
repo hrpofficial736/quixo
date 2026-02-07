@@ -6,7 +6,7 @@ export default function TransferProgressComponent({
   current,
 }: {
   percentage: number;
-  current: "START" | "WAIT" | "STOP";
+  current: "START" | "WAIT" | "STOP" | "PAUSED";
 }) {
   const [progress, setProgress] = useState<number>(percentage);
 
