@@ -12,6 +12,7 @@ func main() {
 	http.HandleFunc("/", socket.WebsocketHandler)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 	    w.WriteHeader(http.StatusOK)
+		log.Println("Health check is OK")
 	    w.Write([]byte("ok"))
 	})
 
