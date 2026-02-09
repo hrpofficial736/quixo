@@ -10,6 +10,11 @@ import (
 
 func main() {
 	http.HandleFunc("/", socket.WebsocketHandler)
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	    w.WriteHeader(http.StatusOK)
+	    w.Write([]byte("ok"))
+	})
+
 	log.Println("Websocket server is running at port 5000...")
 	port := os.Getenv("PORT")
 	if port == "" {
