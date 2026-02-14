@@ -1,13 +1,13 @@
-import { FileTransferMetaDataRequestInterface } from "@/types/fileTransferInterfaces";
+import { FileTransferMetaDataRequestInterface, TransferInterface } from "@/types/fileTransferInterfaces";
 import { create } from "zustand";
 
-export type TransferStatus = "STOP" | "WAIT" | "START" | "PAUSED" | "ERROR" | "COMPLETED";
+
 
 interface FileState {
   id: string;
   meta: FileTransferMetaDataRequestInterface;
   progress: number;
-  status: TransferStatus;
+  status: TransferInterface["current"];
   offset: number;
   error?: string;
 }
@@ -18,7 +18,7 @@ interface FileTransferStore {
   // Actions
   addFile: (meta: FileTransferMetaDataRequestInterface) => void;
   updateProgress: (id: string, progress: number) => void;
-  updateStatus: (id: string, status: TransferStatus) => void;
+  updateStatus: (id: string, status: TransferInterface["current"]) => void;
   setOffset: (id: string, offset: number) => void;
   removeFile: (id: string) => void;
   reset: () => void;
@@ -35,7 +35,7 @@ export const useFileTransferStore = create<FileTransferStore>((set) => ({
         id: meta.id,
         meta,
         progress: 0,
-        status: "STOP", 
+        status: "IN_PROGRESS", 
         offset: 0
     });
     return { files: newFiles };

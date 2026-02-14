@@ -1,16 +1,12 @@
+import { useFileTransferStore } from "@/stores/useFileTransferStore";
 import { TransferInterface } from "@/types/fileTransferInterfaces";
 import { RefObject, useEffect } from "react";
-import { useFileTransferStore } from "@/stores/useFileTransferStore";
-import { useWebRTCConnectionStore } from "@/stores/useWebRTCConnectionStore";
 
 export function useTransferQueue(
-  transfers: TransferInterface[],
-  setTransfers: React.Dispatch<React.SetStateAction<TransferInterface[]>>,
+  fileDataChannels: RTCDataChannel[],
+  transfersRef: RefObject<Map<string, TransferInterface>>,
   filesRef: RefObject<Map<string, File> | null>,
-  isTransferringRef: RefObject<boolean>,
-  activeAbortControllerRef: RefObject<Map<string, AbortController>>,
-  controlDatachannel: RTCDataChannel | null,
-  pc: RTCPeerConnection | null,
+  abortControllers: RefObject<Map<string, AbortController>>,
   sendFile: (
     dc: RTCDataChannel,
     file: File,
@@ -18,117 +14,87 @@ export function useTransferQueue(
     signal?: AbortSignal,
     onComplete?: () => void,
   ) => Promise<number>,
-  sendExtraInfo: (dc: RTCDataChannel, info: object) => void,
+  setTransfers: React.Dispatch<React.SetStateAction<TransferInterface[]>>,
 ) {
-  // Queue Processor
-  useEffect(() => {
-    // Only the SENDER runs this queue logic
+
+  const startSending = (channel: RTCDataChannel, fileId: string, startOffset: number) => {
     if (!filesRef.current) return;
-    if (!pc || !controlDatachannel) return;
-
-    const nextTransfer = transfers.filter((t) => t.current === "WAIT");
-
-    if (nextTransfer.length > 0 && controlDatachannel) {
-      isTransferringRef.current = true;
-
-      // Mark as started in UI
-      setTransfers((prev) =>
-        prev.map((t) =>
-          nextTransfer.some((nt) => nt.id === t.id)
-            ? { ...t, current: "START" }
-            : t,
-        ),
-      );
-
-      nextTransfer.forEach((transfer) => {
-        if (!transfer.id) return;
-        const file = filesRef.current?.get(transfer.id);
-        if (file) {
-          const fileInfo = {
-            id: transfer.id,
-            name: transfer.name || "",
-            size: transfer.size,
-            mime: transfer.mime,
-            chunkSize: transfer.chunkSize,
-          };
-
-          useFileTransferStore.getState().addFile(fileInfo);
-
-          const isResume = (transfer.offset || 0) > 0;
-
-          sendExtraInfo(controlDatachannel, {
-            name: "META",
-            id: transfer.id,
-            fileName: transfer.name,
-            size: transfer.size,
-            mime: transfer.mime,
-            chunkSize: transfer.chunkSize,
-            resume: isResume,
-          });
-
-          const controller = new AbortController();
-          activeAbortControllerRef.current.set(transfer.id, controller);
-
-          const fileDatachannels =
-            useWebRTCConnectionStore.getState().fileDatachannels;
-
-          const fileChannel = fileDatachannels.find(
-            (channel) => channel.label === `file-${transfer.id}`,
-          );
-
-          if (!fileChannel) {
-            activeAbortControllerRef.current.delete(transfer.id); // clean up if failed
-            return;
-          }
-
-          sendFile(
-            fileChannel,
-            file,
-            transfer.offset || 0,
-            controller.signal,
-            () => {
-              console.log(`Transfer ${transfer.id} completed`)
-            },
-          ).then((finalOffset: number) => {
-            activeAbortControllerRef.current.delete(transfer.id!);
-            if (activeAbortControllerRef.current.size === 0) {
-              isTransferringRef.current = false;
-            }
-
-            setTransfers((prev) => {
-              const currentT = prev.find((t) => t.id === transfer.id);
-              if (!currentT) return prev;
-
-              if (finalOffset === transfer.size) {
-                return prev.filter((t) => t.id !== transfer.id);
-              } else {
-                return prev.map((t) =>
-                  t.id === transfer.id
-                    ? {
-                        ...t,
-                        offset: finalOffset,
-                        current: "PAUSED",
-                      }
-                    : t,
-                );
-              }
-            });
-          });
-        } else {
-          isTransferringRef.current = false;
-          setTransfers((prev) => prev.filter((t) => t.id !== transfer.id));
-        }
-      });
+    const file = filesRef.current.get(fileId);
+    if (!file) {
+      console.error(`[Queue] File object not found for ${fileId}`);
+      return;
     }
-  }, [
-    transfers,
-    controlDatachannel,
-    sendFile,
-    sendExtraInfo,
-    pc,
-    activeAbortControllerRef,
-    filesRef,
-    setTransfers,
-    isTransferringRef,
-  ]);
+
+    if (abortControllers.current.has(fileId)) {
+      console.warn(`[Queue] Transfer already active for ${fileId}`);
+      return;
+    }
+
+    const abortController = new AbortController();
+    abortControllers.current.set(fileId, abortController);
+
+    console.log(`[Queue] Calling sendFile for ${fileId} at offset ${startOffset}`);
+    sendFile(channel, file, startOffset, abortController.signal, () => {
+      console.log(`[Queue] Transfer complete for ${fileId}`);
+      setTransfers(prev => prev.filter(t => t.id !== fileId));
+      abortControllers.current.delete(fileId);
+    });
+  };
+
+  // Handle new channels (initial transfer start)
+  useEffect(() => {
+    fileDataChannels.forEach((channel) => {
+      const fileId = channel.label.slice(5);
+      const transfer = transfersRef.current.get(fileId);
+
+      if (!transfer) return;
+
+      const startTransfer = () => {
+        const currentTransfer = transfersRef.current.get(fileId);
+        if (currentTransfer && currentTransfer.current === "IN_PROGRESS") return;
+
+        console.log(`[Queue] Starting transfer for ${fileId}`);
+
+        const updatedTransfer = {
+          ...transfer,
+          current: (transfer.current === "WAITING_FOR_DATACHANNEL" ? "IN_PROGRESS" : "PAUSED") as TransferInterface["current"]
+        };
+
+        transfersRef.current.set(fileId, updatedTransfer);
+        setTransfers(prev => prev.map(t => t.id === fileId ? updatedTransfer : t));
+
+        if (transfer.current === "WAITING_FOR_DATACHANNEL" || transfer.current === "WAITING_FOR_RESPONSE") {
+          startSending(channel, fileId, 0);
+        }
+      };
+
+      if (channel.readyState === "open" && transfer.current !== "IN_PROGRESS") {
+        startTransfer();
+      } else if (channel.readyState === "connecting") {
+        console.log(`[Queue] Channel for ${fileId} is connecting, attaching 'open' listener`);
+        const onOpen = () => {
+          console.log(`[Queue] Channel for ${fileId} is now open (listener triggered)`);
+          startTransfer();
+          channel.removeEventListener("open", onOpen);
+        };
+        channel.addEventListener("open", onOpen);
+      }
+    });
+  }, [fileDataChannels, transfersRef, abortControllers, filesRef, sendFile, setTransfers]);
+
+  // Handle resume: when a transfer changes from PAUSED to IN_PROGRESS, re-call sendFile
+  const resumeTransfer = (fileId: string) => {
+    const channel = fileDataChannels.find(ch => ch.label === `file-${fileId}`);
+    if (!channel || channel.readyState !== "open") {
+      console.error(`[Queue] No open channel found for resume of ${fileId}`);
+      return;
+    }
+
+    const savedOffset = useFileTransferStore.getState().files.get(fileId)?.offset ?? 0;
+    console.log(`[Queue] Resuming transfer for ${fileId} from offset ${savedOffset}`);
+    startSending(channel, fileId, savedOffset);
+  };
+
+  return { resumeTransfer };
 }
+

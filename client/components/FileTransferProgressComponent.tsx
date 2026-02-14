@@ -58,20 +58,28 @@ export default function FileTransferProgressComponent({
 
       {/*Transfer Controls*/}
       <div className="rounded-2xl bg-bgTertiary/10 px-3 py-2 flex gap-2">
-        {fileInfo.current !== "STOP" && <button
-          onClick={() => {
-            setIsPaused(!isPaused);
-            if (isPaused) {
-              onResume(fileInfo.id!);
-            } else {
-              onPause(fileInfo.id!);
-            }
-          }}
-          className="rounded-lg bg-bgSecondary border-2 cursor-pointer border-bgTertiary text-textTertiary font-semibold px-2 py-1 f-c-row gap-1"
-        >
-          {isPaused ? <FaPlay /> : <FaPause />}
-          {isPaused ? "Resume" : "Pause"}
-        </button>}
+        {fileInfo.current !== "WAITING_FOR_DATACHANNEL" && fileInfo.current !== "WAITING_FOR_RESPONSE" && (
+          fileInfo.pausedBy === "peer" ? (
+            <span className="rounded-lg bg-bgSecondary border-2 border-bgTertiary text-textTertiary font-semibold px-2 py-1 text-xs opacity-60">
+              Paused by peer
+            </span>
+          ) : (
+            <button
+              onClick={() => {
+                setIsPaused(!isPaused);
+                if (isPaused) {
+                  onResume(fileInfo.id!);
+                } else {
+                  onPause(fileInfo.id!);
+                }
+              }}
+              className="rounded-lg bg-bgSecondary border-2 cursor-pointer border-bgTertiary text-textTertiary font-semibold px-2 py-1 f-c-row gap-1"
+            >
+              {isPaused ? <FaPlay /> : <FaPause />}
+              {isPaused ? "Resume" : "Pause"}
+            </button>
+          )
+        )}
 
         <button
           onClick={() => onCancel(fileInfo.id!)}

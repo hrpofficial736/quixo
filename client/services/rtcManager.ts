@@ -168,20 +168,30 @@ function createDataChannel(
     }
     if (handler) handler();
   };
+  
+  return dataChannel;
 }
 
-function listenForDataChannel(pc: RTCPeerConnection, handler: () => void) {
-  pc.ondatachannel = (event) => {
+function listenForDataChannel(pc: RTCPeerConnection, handler: (channel: RTCDataChannel) => void) {
+  pc.addEventListener("datachannel", (event) => {
+    console.log("Incoming data channel in services", event.channel);
     const channel = event.channel;
-    channel.onopen = () => {
+
+    const onChannelOpen = () => {
       if (channel.label === "control") {
         useWebRTCConnectionStore.getState().setControlDataChannel(channel);
       } else {
         useWebRTCConnectionStore.getState().setFileDataChannels(channel);
       }
-      handler();
+      handler(channel);
     };
-  };
+
+    if (channel.readyState === "open") {
+       onChannelOpen();
+    } else {
+       channel.addEventListener("open", onChannelOpen, { once: true });
+    }
+  });
 }
 
 function listenForDataChannelMessage(

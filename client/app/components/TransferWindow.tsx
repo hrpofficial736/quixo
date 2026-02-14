@@ -11,7 +11,7 @@ import {
   FileTransferMetaDataRequestInterface,
   TransferInterface,
 } from "@/types/fileTransferInterfaces";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 export default function TransferWindow({
   isOpen,
@@ -22,39 +22,35 @@ export default function TransferWindow({
 }) {
   const { controlDatachannel, fileDatachannels, pc } =
     useWebRTCConnectionStore();
-
-  const listeningChannels = useRef(new Set<string>());
   const [requests, setRequests] = useState<
     FileTransferMetaDataRequestInterface[]
   >([]);
-  const { sendFile, sendExtraInfo, listenForExtraInfo, listenForFile } =
+  const { sendExtraInfo, listenForExtraInfo, sendFile, listenForFile } =
     useHandleFileTransfer();
   const filesRef = useRef<Map<string, File> | null>(null);
-  const [transfers, setTransfers] = useState<TransferInterface[]>([]);
-  const isTransferringRef = useRef(false);
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
 
-  const transfersRef = useRef(transfers);
-  useEffect(() => {
-    transfersRef.current = transfers;
-  }, [transfers]);
+  const transfersRef = useRef<Map<string, TransferInterface>>(new Map());
+
+  const [transfers, setTransfers] = useState<TransferInterface[]>([]);
+  const resumeTransferRef = useRef<((fileId: string) => void) | null>(null);
+  
 
   // Hooks
   const {
-    handleResponse,
-    handleCancel,
-    handleFileChange,
-    handlePause,
-    handleResume,
+    handleAcceptOrRejectResponse,
+    handleCancelTransfer,
+    handlePauseTransfer,
+    handleResumeTransfer,
+    handleSelectFilesAndSendTransferRequest
   } = useTransferActions(
     controlDatachannel,
     transfersRef,
-    filesRef,
     setTransfers,
+    filesRef,
     setRequests,
     requests,
     abortControllers,
-    isTransferringRef,
     sendExtraInfo,
   );
 
@@ -63,35 +59,24 @@ export default function TransferWindow({
     pc,
     transfersRef,
     filesRef,
-    isTransferringRef,
     abortControllers,
-    setTransfers,
     setRequests,
-    listenForExtraInfo,
-  );
-
-  useTransferQueue(
-    transfers,
     setTransfers,
-    filesRef,
-    isTransferringRef,
-    abortControllers,
-    controlDatachannel,
-    pc,
-    sendFile,
-    sendExtraInfo,
+    listenForExtraInfo,
+    listenForFile,
+    resumeTransferRef,
   );
 
-  // Listener Attachment
-  useEffect(() => {
-    fileDatachannels.forEach((dc) => {
-      if (!listeningChannels.current.has(dc.label)) {
-        if (dc.label === "control") return;
-        listenForFile(dc);
-        listeningChannels.current.add(dc.label);
-      }
-    });
-  }, [fileDatachannels, listenForFile]);
+  const { resumeTransfer } = useTransferQueue(
+    fileDatachannels,
+    transfersRef,
+    filesRef,
+    abortControllers,
+    sendFile,
+    setTransfers
+  );
+  resumeTransferRef.current = resumeTransfer;
+
 
   return (
     <div className="w-full h-full">
@@ -106,12 +91,12 @@ export default function TransferWindow({
             <ConnectedDevicesSection />
             <SendFilesSection
               transfers={transfers}
-              onFileChange={(e) => handleFileChange(e, pc)}
-              onCancel={handleCancel}
-              onPause={handlePause}
-              onResume={handleResume}
+              onFileChange={(e) => handleSelectFilesAndSendTransferRequest(e, pc)}
+              onCancel={handleCancelTransfer}
+              onPause={handlePauseTransfer}
+              onResume={(id) => handleResumeTransfer(id, resumeTransfer)}
             />
-            <RequestsSection requests={requests} onResponse={handleResponse} />
+            <RequestsSection requests={requests} onResponse={handleAcceptOrRejectResponse} />
           </div>
         </Window>
       )}

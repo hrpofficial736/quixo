@@ -1,4 +1,6 @@
+import { EVENTS } from "@/lib/events";
 import { useWebRTCConnectionStore } from "@/stores/useWebRTCConnectionStore";
+import { useFileTransferStore } from "@/stores/useFileTransferStore";
 import {
   FileTransferMetaDataRequestInterface,
   TransferInterface,
@@ -7,21 +9,20 @@ import { RefObject } from "react";
 
 export function useTransferActions(
     controlDatachannel: RTCDataChannel | null,
-    transfersRef: RefObject<TransferInterface[]>,
-    filesRef: RefObject<Map<string, File> | null>,
+  transfersRef: RefObject<Map<string, TransferInterface>>,
     setTransfers: React.Dispatch<React.SetStateAction<TransferInterface[]>>,
+    filesRef: RefObject<Map<string, File> | null>,
     setRequests: React.Dispatch<React.SetStateAction<FileTransferMetaDataRequestInterface[]>>,
     requests: FileTransferMetaDataRequestInterface[],
     abortControllers: RefObject<Map<string, AbortController>>,
-    isTransferringRef: RefObject<boolean>,
     sendExtraInfo: (dc: RTCDataChannel, data: object) => void
 ) {
     const { closeFileDataChannel } = useWebRTCConnectionStore();
 
-    const handleResponse = (res: boolean, id: string) => {
+    const handleAcceptOrRejectResponse = (res: boolean, id: string) => {
         if (!controlDatachannel) return;
         sendExtraInfo(controlDatachannel, {
-          name: "METADATA-ACK",
+          eventName: EVENTS.METADATA_ACK,
           id,
           res: res ? "ACC" : "REJ",
         });
@@ -30,24 +31,18 @@ export function useTransferActions(
         });
         if (res) {
           const fileInfo = requests.filter((request) => request.id === id)[0];
-          setTransfers((prev) => {
-            return [
-              ...prev,
-              {
-                ...fileInfo,
-                current: "WAIT",
-              },
-            ];
-          });
+          const updatedTransfer = {...fileInfo, current: "WAITING_FOR_DATACHANNEL" as TransferInterface["current"]};
+          transfersRef.current.set(id, updatedTransfer);
+          setTransfers((prev) => [...prev, updatedTransfer]);
         }
     };
     
-    const handleCancel = (id: string) => {
+    const handleCancelTransfer = (id: string) => {
         if (!controlDatachannel) return;
-        setTransfers((prev) => prev.filter((t) => t.id !== id));
+        transfersRef.current.delete(id);
     
         sendExtraInfo(controlDatachannel, {
-          name: "FILE_TRANSFER_CANCELLED",
+          eventName: EVENTS.FILE_TRANSFER_CANCELLED,
           id,
         });
     
@@ -55,14 +50,11 @@ export function useTransferActions(
         if (controller) {
           controller.abort();
           abortControllers.current.delete(id);
-          if (abortControllers.current.size === 0) {
-            isTransferringRef.current = false;
-          }
         }
         closeFileDataChannel(id);
     };
     
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, pc: RTCPeerConnection | null) => {
+    const handleSelectFilesAndSendTransferRequest = (e: React.ChangeEvent<HTMLInputElement>, pc: RTCPeerConnection | null) => {
         if (
           !e.target.files ||
           !pc ||
@@ -71,9 +63,9 @@ export function useTransferActions(
           return;
         for (const file of e.target.files) {
           const fileInfo = {
+            eventName: EVENTS.META,
             id: crypto.randomUUID(),
-            name: "META",
-            fileName: file.name,
+            name: file.name,
             size: file.size,
             mime: file.type,
             chunkSize: 16384,
@@ -83,57 +75,86 @@ export function useTransferActions(
             filesRef.current = new Map();
           }
           filesRef.current.set(fileInfo.id, file);
-          setTransfers((prev) => [
-            ...prev,
-            {
-              id: fileInfo.id,
-              name: fileInfo.fileName,
-              size: fileInfo.size,
-              chunkSize: fileInfo.chunkSize,
-              mime: fileInfo.mime,
-              current: "STOP",
-            },
-          ]);
+          const {id, name, size, mime, chunkSize} = fileInfo;
+          transfersRef.current.set(id, {
+            id,
+            name,
+            size,
+            mime,
+            chunkSize,
+            current: "WAITING_FOR_RESPONSE",
+          },)
+
+          // Register in the file transfer store so progress updates work
+          useFileTransferStore.getState().addFile({id, name, size, mime, chunkSize});
+
+          console.log("sending metadata to receiver...", fileInfo)
+          setTransfers((prev) => {
+            if (prev.some(t => t.id === fileInfo.id)) return prev;
+            return [...prev, {...fileInfo, current: "WAITING_FOR_RESPONSE"}];
+          });
           sendExtraInfo(controlDatachannel, fileInfo);
         }
     };
     
-    const handlePause = (id: string) => {
-        const target = transfersRef.current?.find((t) => t.id === id);
+  const handlePauseTransfer = (id: string) => {
+      if (!controlDatachannel) return;
+        const target = transfersRef.current.get(id);
         if (!target) return;
     
-        if (controlDatachannel) {
-          sendExtraInfo(controlDatachannel, { name: "FILE_PAUSE", id });
-        }
-    
+        // Abort the active sendFile
         const controller = abortControllers.current.get(id);
         if (controller) {
             controller.abort();
             abortControllers.current.delete(id);
-            if (abortControllers.current.size === 0) {
-                isTransferringRef.current = false;
-            }
         }
+
+        // Update transfer state
+        transfersRef.current.set(id, {
+            ...target,
+            current: "PAUSED",
+            pausedBy: "self",
+        });
+        setTransfers(prev => prev.map(t => t.id === id ? { ...t, current: "PAUSED", pausedBy: "self" } : t));
     
-        setTransfers((prev) =>
-          prev.map((t) => (t.id === id ? { ...t, current: "PAUSED" } : t)),
-        );
+        // Update store
+        useFileTransferStore.getState().updateStatus(id, "PAUSED");
+
+        // Notify peer
+        sendExtraInfo(controlDatachannel, { eventName: EVENTS.FILE_PAUSE, id });
     };
     
-  const handleResume = (id: string) => {
-    setTransfers((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, current: "WAIT" } : t)),
-    );
+  const handleResumeTransfer = (id: string, resumeTransfer?: (fileId: string) => void) => {
+    const target = transfersRef.current.get(id);
+    if (!target) return;
+    
+    // Update transfer state
+    transfersRef.current.set(id, {
+        ...target,
+        current: "IN_PROGRESS",
+        pausedBy: undefined,
+    });
+    setTransfers(prev => prev.map(t => t.id === id ? { ...t, current: "IN_PROGRESS", pausedBy: undefined } : t));
+
+    // Update store
+    useFileTransferStore.getState().updateStatus(id, "IN_PROGRESS");
+
+    // Notify peer
     if (controlDatachannel) {
-      sendExtraInfo(controlDatachannel, { name: "FILE_RESUME", id });
+      sendExtraInfo(controlDatachannel, { eventName: EVENTS.FILE_RESUME, id });
+    }
+
+    // Resume sending from saved offset
+    if (resumeTransfer) {
+      resumeTransfer(id);
     }
   };
 
     return {
-        handleResponse,
-        handleCancel,
-        handleFileChange,
-        handlePause,
-        handleResume,
+      handleAcceptOrRejectResponse,
+      handleCancelTransfer,
+      handleSelectFilesAndSendTransferRequest,
+      handlePauseTransfer,
+      handleResumeTransfer,
     }
 }

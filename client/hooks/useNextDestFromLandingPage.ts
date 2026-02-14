@@ -135,7 +135,7 @@ function handlePairWithOtherDevice(
         outgoingCandidatesQueue.push(candidate);
       }
     });
-    listenForDataChannel(pc, () => {
+    listenForDataChannel(pc, (_channel) => {
       navigateToTransferWindowSetter(true);
     });
     listenEvent("offer", (params) => {

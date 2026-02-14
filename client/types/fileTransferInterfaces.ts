@@ -8,7 +8,8 @@ export interface FileTransferMetaDataRequestInterface {
 }
 
 export interface TransferInterface extends FileTransferMetaDataRequestInterface {
-  current: "START" | "WAIT" | "STOP" | "PAUSED";
+  current: "IN_PROGRESS" | "WAITING_FOR_DATACHANNEL" | "PAUSED" | "WAITING_FOR_RESPONSE";
+  pausedBy?: "self" | "peer";
 }
 
 export interface ExtraInfoHandlerParamsInterface {
