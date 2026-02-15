@@ -11,7 +11,7 @@ import {
   FileTransferMetaDataRequestInterface,
   TransferInterface,
 } from "@/types/fileTransferInterfaces";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function TransferWindow({
   isOpen,
@@ -75,8 +75,10 @@ export default function TransferWindow({
     sendFile,
     setTransfers
   );
-  resumeTransferRef.current = resumeTransfer;
-
+  
+  useEffect(() => {
+    resumeTransferRef.current = resumeTransfer;
+  }, [resumeTransfer]);
 
   return (
     <div className="w-full h-full">

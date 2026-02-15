@@ -28,6 +28,8 @@ export const useWebRTCConnectionStore = create<WebRTCConnectionStoreProps>(
     setFileDataChannels: (dc) => {
       const existingChannels = get().fileDatachannels || [];
       if (!dc) return;
+      // Prevent duplicate entries for the same channel
+      if (existingChannels.some((ch) => ch.label === dc.label)) return;
       set({ fileDatachannels: [...existingChannels, dc] });
     },
     closeFileDataChannel: (label) => {

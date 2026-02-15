@@ -49,6 +49,9 @@ export function useTransferQueue(
 
       if (!transfer) return;
 
+      // Only process channels where WE are the sender (file exists in our filesRef)
+      if (!filesRef.current || !filesRef.current.has(fileId)) return;
+
       const startTransfer = () => {
         const currentTransfer = transfersRef.current.get(fileId);
         if (currentTransfer && currentTransfer.current === "IN_PROGRESS") return;
@@ -84,6 +87,9 @@ export function useTransferQueue(
 
   // Handle resume: when a transfer changes from PAUSED to IN_PROGRESS, re-call sendFile
   const resumeTransfer = (fileId: string) => {
+    // Only the sender can resume sending — receiver doesn't have the file
+    if (!filesRef.current || !filesRef.current.has(fileId)) return;
+
     const channel = fileDataChannels.find(ch => ch.label === `file-${fileId}`);
     if (!channel || channel.readyState !== "open") {
       console.error(`[Queue] No open channel found for resume of ${fileId}`);

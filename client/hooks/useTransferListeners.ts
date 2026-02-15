@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import rtcManager from "@/services/rtcManager";
 import { EVENTS } from "@/lib/events";
 import { useFileTransferStore } from "@/stores/useFileTransferStore";
+import { useWebRTCConnectionStore } from "@/stores/useWebRTCConnectionStore";
 
 export function useTransferListeners(
   controlDatachannel: RTCDataChannel | null,
@@ -71,14 +72,13 @@ export function useTransferListeners(
       });
       const target = transfersRef.current.get(data.id);
       if (target) {
-        transfersRef.current.set(data.id, {
-          ...target,
-          current: "WAITING_FOR_DATACHANNEL",
-        });
-        
+        const updated = { ...target, current: "WAITING_FOR_DATACHANNEL" as TransferInterface["current"] };
+        transfersRef.current.set(data.id, updated);
+        setTransfers(prev => prev.map(t => t.id === data.id ? updated : t));
       }
     } else {
       transfersRef.current.delete(data.id);
+      setTransfers(prev => prev.filter(t => t.id !== data.id));
       toast.error("File transfer request rejected by the receiver!");
     }
   };
@@ -174,6 +174,25 @@ export function useTransferListeners(
       // Attach message listener IMMEDIATELY — don't wait for onopen!
       // This prevents data loss from race condition where sender sends before listener is attached.
       listenForFile(channel);
+
+      // Update receiver-side transfer status to IN_PROGRESS
+      const target = transfersRef.current.get(fileId);
+      if (target && (target.current === "WAITING_FOR_DATACHANNEL" || target.current === "WAITING_FOR_RESPONSE")) {
+        const updated = { ...target, current: "IN_PROGRESS" as TransferInterface["current"] };
+        transfersRef.current.set(fileId, updated);
+        setTransfers(prev => prev.map(t => t.id === fileId ? updated : t));
+        useFileTransferStore.getState().updateStatus(fileId, "IN_PROGRESS");
+      }
+
+      // Also add the channel to the store so it's tracked (needed for pause/resume on host side)
+      const addToStore = () => {
+        useWebRTCConnectionStore.getState().setFileDataChannels(channel);
+      };
+      if (channel.readyState === "open") {
+        addToStore();
+      } else {
+        channel.addEventListener("open", addToStore, { once: true });
+      }
     }
   };
 
