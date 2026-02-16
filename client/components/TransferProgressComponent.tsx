@@ -1,41 +1,43 @@
+import { TransferInterface } from "@/types/fileTransferInterfaces";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
 
 export default function TransferProgressComponent({
   percentage,
   current,
 }: {
   percentage: number;
-  current: "START" | "WAIT" | "STOP";
+  current: TransferInterface["current"];
 }) {
-  const [progress, setProgress] = useState<number>(percentage);
-
-  useEffect(() => {
-    const updatePercentage = () => {
-      setProgress(percentage);
-    };
-    updatePercentage();
-  }, [percentage]);
-  return (
-    <>
-      {current === "START" ? (
-        <div className="flex flex-col gap-0.5">
-          <div className="text-xs font-medium self-end">{progress} %</div>
-          <div className="relative w-30 h-2.5 bg-bgTertiary/40 rounded-full">
+  if (current === "IN_PROGRESS" || current === "PAUSED") {
+    return (
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="relative flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden min-w-[100px]">
+          <motion.div
+            animate={{ width: `${percentage}%` }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className={`absolute h-full rounded-full ${
+              current === "PAUSED"
+                ? "bg-textTertiary"
+                : "bg-white"
+            }`}
+          />
+          {/* Shimmer effect for active transfers */}
+          {current === "IN_PROGRESS" && (
             <motion.div
-              animate={{
-                width: `${progress}%`,
-              }}
-              transition={{
-                duration: 0.3,
-              }}
-              className="absolute h-full z-40 bg-textSecondary rounded-full"
+              className="absolute h-full w-8 bg-gradient-to-r from-transparent via-white/5 to-transparent rounded-full"
+              animate={{ x: ["-32px", "200px"] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
             />
-          </div>
+          )}
         </div>
-      ) : (
-        <h1 className="text-sm font-medium text-textTertiary">Pending</h1>
-      )}
-    </>
+        <span className="text-xs font-medium text-textSecondary tabular-nums whitespace-nowrap">
+          {current === "PAUSED" ? "Paused" : `${percentage}%`}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <span className="text-xs font-medium text-textTertiary">Pending</span>
   );
 }

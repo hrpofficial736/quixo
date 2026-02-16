@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-    --color-bgPrimary: #0d0c0c;
-    --color-bgSecondary: #1f1d1d;
-    --color-bgTertiary: #727572;
-    --color-textPrimary: #f5f2f2;
-    --color-textSecondary: #ded9d9;
-    --color-textTertiary: #b8b2b2;
+    --color-bgPrimary: #09090b;
+    --color-bgSecondary: #141414;
+    --color-bgTertiary: #262626;
+    --color-textPrimary: #fafafa;
+    --color-textSecondary: #a1a1aa;
+    --color-textTertiary: #52525b;
 
-    --color-success: #0ef20a;
-    --color-error: #f20a0a;
+    --color-accent: #ffffff;
+    --color-success: #22c55e;
+    --color-error: #ef4444;
 
     --breakpoint-custom600: 600px;
     --breakpoint-custom400: 400px;
@@ -21,6 +22,9 @@
     }
     .f-c-col {
         @apply flex flex-col justify-center items-center;
+    }
+    .glass {
+        @apply bg-white/[0.04] backdrop-blur-md border border-white/[0.06] rounded-xl;
     }
 }
 

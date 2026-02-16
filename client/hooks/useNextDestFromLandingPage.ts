@@ -97,6 +97,9 @@ function handlePairWithOtherDevice(
       useConnectionStatusStore.setState(
         useConnectionStatusStore.getInitialState(),
       );
+      emitEvent(socket!, "delete_room", {
+        pairingId: useUserStore.getState().pairingId,
+      });
       router.push("/");
     };
 
@@ -132,7 +135,7 @@ function handlePairWithOtherDevice(
         outgoingCandidatesQueue.push(candidate);
       }
     });
-    listenForDataChannel(pc, () => {
+    listenForDataChannel(pc, (_channel) => {
       navigateToTransferWindowSetter(true);
     });
     listenEvent("offer", (params) => {

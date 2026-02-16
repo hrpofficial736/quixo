@@ -2,6 +2,7 @@
 
 import socketManager from "@/services/socketManager";
 import { createContext, useContext, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 const SocketContext = createContext<WebSocket | null>(null);
 
@@ -11,6 +12,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     createSocket((ws) => {
       setSocket(ws);
+    }, () => {
+      toast.error("Error occured, please refresh the page")
     });
     return () => {
       disconnect();

@@ -1,75 +1,65 @@
-import { setFileSize } from "@/lib/fileSize";
 import { FileTransferMetaDataRequestInterface } from "@/types/fileTransferInterfaces";
-import { FaFile } from "react-icons/fa6";
-import { IoClose } from "react-icons/io5";
-import { MdDone } from "react-icons/md";
+import { setFileSize } from "@/lib/fileSize";
+import { getFileTypeInfo } from "@/lib/fileIcon";
+import { FiCheck, FiX } from "react-icons/fi";
+import { motion } from "motion/react";
 
 export default function FileTransferRequestComponent({
-  info,
-  handler,
+  fileInfo,
+  onResponse,
 }: {
-  info: FileTransferMetaDataRequestInterface;
-  handler: (accepted: boolean, id: string) => void;
+  fileInfo: FileTransferMetaDataRequestInterface;
+  onResponse: (res: boolean, id: string) => void;
 }) {
+  const { label: typeLabel, color: typeColor } = getFileTypeInfo(fileInfo.mime || "");
+  const ext = fileInfo.name.split(".").pop()?.toUpperCase() || "";
+
   return (
-    <div
-      className="bg-bgTertiary/10 rounded-xl w-full p-3 sm:p-4
-                    flex flex-col sm:flex-row
-                    gap-4 sm:gap-0
-                    sm:items-center sm:justify-between"
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.25 }}
+      className="glass px-4 py-3 flex items-center justify-between gap-3"
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <FaFile className="text-textSecondary text-2xl sm:text-3xl shrink-0" />
-
-        <div className="flex flex-col gap-1 min-w-0">
-          <div
-            className="text-xs sm:text-sm font-semibold text-textSecondary
-                       break-all sm:break-words
-                       truncate sm:truncate-none
-                       max-w-[220px] sm:max-w-[320px] md:max-w-[420px]"
-            title={info.name}
-          >
-            {info.name}
-          </div>
-
-          <div className="text-[10px] sm:text-xs text-textTertiary font-light">
-            {setFileSize(info.size)}
+      {/* File info */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="h-9 w-9 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0">
+          <span className={`text-[10px] font-bold ${typeColor}`}>{ext}</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm text-textPrimary font-medium truncate">
+            {fileInfo.name}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-textTertiary">
+              {setFileSize(fileInfo.size)}
+            </span>
+            <span className="text-[11px] text-textTertiary">•</span>
+            <span className={`text-[11px] font-medium ${typeColor}`}>
+              {typeLabel}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ACTION BUTTONS */}
-      <div className="flex w-full sm:w-auto gap-2 sm:gap-3">
+      {/* Actions */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
-          onClick={() => handler(true, info.id!)}
-          className="flex-1 sm:flex-none
-                     bg-bgTertiary/10
-                     text-success/80 font-semibold
-                     text-xs sm:text-sm
-                     px-3 py-2 rounded-md
-                     cursor-pointer
-                     flex items-center justify-center gap-1
-                     active:scale-95 transition"
+          onClick={() => onResponse(true, fileInfo.id!)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white text-black text-xs font-semibold hover:bg-white/90 active:scale-[0.97] transition-all cursor-pointer"
         >
-          <MdDone className="text-success text-sm" />
+          <FiCheck size={13} />
           Accept
         </button>
-
         <button
-          onClick={() => handler(false, info.id!)}
-          className="flex-1 sm:flex-none
-                     bg-bgTertiary/10
-                     text-error font-semibold
-                     text-xs sm:text-sm
-                     px-3 py-2 rounded-md
-                     cursor-pointer
-                     flex items-center justify-center gap-1
-                     active:scale-95 transition"
+          onClick={() => onResponse(false, fileInfo.id!)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-white/10 text-textSecondary text-xs font-medium hover:bg-white/[0.04] active:scale-[0.97] transition-all cursor-pointer"
         >
-          <IoClose className="text-error text-sm" />
+          <FiX size={13} />
           Reject
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

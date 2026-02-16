@@ -38,9 +38,9 @@ function createNewRTCPeerConnection(onCloseHandler: () => void) {
       pc.close();
 
       candidateQueues = new WeakMap<RTCPeerConnection, RTCIceCandidate[]>();
+      
     }
   };
-  
 
   useWebRTCConnectionStore.getState().setPC(pc);
 
@@ -154,22 +154,44 @@ async function setAnswer(
   }
 }
 
-function createDataChannel(pc: RTCPeerConnection, handler?: () => void) {
-  const dataChannel = pc.createDataChannel("file-transfer");
+function createDataChannel(
+  pc: RTCPeerConnection,
+  channelName: string,
+  handler?: () => void,
+) {
+  const dataChannel = pc.createDataChannel(channelName);
   dataChannel.onopen = () => {
-    useWebRTCConnectionStore.getState().setDataChannel(dataChannel);
+    if (channelName === "control") {
+      useWebRTCConnectionStore.getState().setControlDataChannel(dataChannel);
+    } else {
+      useWebRTCConnectionStore.getState().setFileDataChannels(dataChannel);
+    }
     if (handler) handler();
   };
+  
+  return dataChannel;
 }
 
-function listenForDataChannel(pc: RTCPeerConnection, handler: () => void) {
-  pc.ondatachannel = (event) => {
+function listenForDataChannel(pc: RTCPeerConnection, handler: (channel: RTCDataChannel) => void) {
+  pc.addEventListener("datachannel", (event) => {
+    console.log("Incoming data channel in services", event.channel);
     const channel = event.channel;
-    channel.onopen = () => {
-      useWebRTCConnectionStore.getState().setDataChannel(channel);
-      handler();
+
+    const onChannelOpen = () => {
+      if (channel.label === "control") {
+        useWebRTCConnectionStore.getState().setControlDataChannel(channel);
+      } else {
+        useWebRTCConnectionStore.getState().setFileDataChannels(channel);
+      }
+      handler(channel);
     };
-  };
+
+    if (channel.readyState === "open") {
+       onChannelOpen();
+    } else {
+       channel.addEventListener("open", onChannelOpen, { once: true });
+    }
+  });
 }
 
 function listenForDataChannelMessage(

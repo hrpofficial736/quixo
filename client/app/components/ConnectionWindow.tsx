@@ -1,6 +1,5 @@
 "use client";
 
-import Window from "@/components/Window";
 import { useEffect, useState } from "react";
 import ConnectionOptions from "./ConnectionOptions";
 import DeviceNamePrompt from "./DeviceNamePrompt";
@@ -8,6 +7,7 @@ import toast from "react-hot-toast";
 import useInitializeConnection from "@/hooks/useInitializeConnection";
 import { useUserStore } from "@/stores/useUserStore";
 import { AnimatePresence, motion } from "motion/react";
+import { FiX } from "react-icons/fi";
 
 export default function ConnectionWindow({
   isOpen,
@@ -40,7 +40,6 @@ export default function ConnectionWindow({
     });
   };
 
-
   useEffect(() => {
     const checkIfPaired = () => {
       if (readyToPair === "READY_TO_PAIR") {
@@ -66,52 +65,51 @@ export default function ConnectionWindow({
   return (
     <AnimatePresence>
       {isOpen && (
-        <Window
-          showClose={true}
-          onClose={onCloseAction}
-          header="Connect"
-          extraClass="xl:w-[40%] sm:w-[90%] w-full"
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="fixed z-40 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md mx-4"
         >
-          <AnimatePresence mode="wait">
-            {proceedToConnectionOptions ? (
-              <motion.div
-                key={"options"}
-                initial={{
-                  x: 200,
-                  opacity: 0,
-                }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                }}
-                exit={{
-                  x: -200,
-                  opacity: 0,
-                }}
-                transition={{
-                  duration: 0.3,
-                }}
-                className="w-full h-full"
+          <div className="bg-bgSecondary border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <h2 className="text-base font-semibold text-textPrimary">
+                Connect
+              </h2>
+              <button
+                onClick={onCloseAction}
+                className="p-1.5 rounded-lg hover:bg-white/[0.06] text-textTertiary hover:text-textPrimary transition-all cursor-pointer"
               >
-                <ConnectionOptions url={redirectUrl} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key={"prompt"}
-                exit={{
-                  x: -200,
-                  opacity: 0,
-                }}
-                transition={{
-                  duration: 0.1,
-                }}
-                className="w-full h-full"
-              >
-                <DeviceNamePrompt onSubmit={initializeConnectionHandler} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </Window>
+                <FiX size={16} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <AnimatePresence mode="wait">
+              {proceedToConnectionOptions ? (
+                <motion.div
+                  key="options"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ConnectionOptions url={redirectUrl} />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="prompt"
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <DeviceNamePrompt onSubmit={initializeConnectionHandler} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

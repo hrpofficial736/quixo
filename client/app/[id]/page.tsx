@@ -1,7 +1,6 @@
 "use client";
 
-import Window from "@/components/Window";
-import { poppins } from "../fonts";
+import { inter } from "../fonts";
 import { useEffect, useState } from "react";
 import DeviceNamePrompt from "../components/DeviceNamePrompt";
 import useNextDestFromLandingPage from "@/hooks/useNextDestFromLandingPage";
@@ -53,7 +52,7 @@ export default function TransferPage() {
   else if (pageToShow === "NAME_PROMPT")
     return (
       <div
-        className={`w-screen h-screen f-c-row bg-bgPrimary ${poppins.className}`}
+        className={`w-screen h-screen f-c-row bg-bgPrimary ${inter.className}`}
       >
         <DeviceNamePrompt
           onSubmit={(name: string) => {
@@ -64,7 +63,7 @@ export default function TransferPage() {
     );
   return (
     <div
-      className={`w-screen h-screen ${poppins.className} bg-bgPrimary f-c-row`}
+      className={`w-screen h-screen ${inter.className} bg-bgPrimary`}
     >
       <TransferWindow onClose={() => {}} isOpen={pageToShow === "TRANSFER"} />
     </div>
