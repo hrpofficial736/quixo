@@ -91,13 +91,14 @@ export function useTransferListeners(
     if (!data || !data.id) return;
 
     transfersRef.current.delete(data.id);
-
+    setTransfers(prev => prev.filter(t => t.id !== data.id));
+    setRequests(prev => prev.filter(r => r.id !== data.id));
     const controller = abortControllers.current.get(data.id);
     if (controller) {
       controller.abort();
       abortControllers.current.delete(data.id);
-      toast.error("Transfer cancelled by peer");
     }
+    toast.error("Transfer cancelled by peer");
   };
 
   const listenForPauseTransferEvent = (

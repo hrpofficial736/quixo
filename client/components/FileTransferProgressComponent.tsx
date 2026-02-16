@@ -1,11 +1,10 @@
 import { TransferInterface } from "@/types/fileTransferInterfaces";
-import { FaFile } from "react-icons/fa";
 import TransferProgressComponent from "./TransferProgressComponent";
 import { useFileTransferStore } from "@/stores/useFileTransferStore";
-import { useEffect, useState } from "react";
 import { setFileSize } from "@/lib/fileSize";
-import { FaPlay } from "react-icons/fa";
-import { FaPause } from "react-icons/fa6";
+import { getFileTypeInfo } from "@/lib/fileIcon";
+import { FiPause, FiPlay, FiX } from "react-icons/fi";
+import { motion } from "motion/react";
 
 export default function FileTransferProgressComponent({
   fileInfo,
@@ -18,76 +17,87 @@ export default function FileTransferProgressComponent({
   onPause: (id: string) => void;
   onResume: (id: string) => void;
 }) {
-  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const progress = useFileTransferStore(
+    (state) => state.files.get(fileInfo.id!)?.progress ?? 0,
+  );
+  const percentage = Math.round(progress);
+  const { label: typeLabel, color: typeColor } = getFileTypeInfo(fileInfo.mime || "");
 
-  // Read progress directly from store for this file
-  const fileState = useFileTransferStore((state) => state.files.get(fileInfo.id!));
-  const progress = fileState?.progress || 0;
-
-  // Sync local pause state with parent prop (optional but good for consistency)
-  useEffect(() => {
-    const updateIsPaused = () => {
-      setIsPaused(fileInfo.current === "PAUSED");
-    }
-    updateIsPaused();
-  }, [fileInfo]);
+  // Get file extension
+  const ext = fileInfo.name.split(".").pop()?.toUpperCase() || "";
 
   return (
-    <div className="flex flex-col items-end">
-      {/*Transfer Status*/}
-      <div className="bg-bgTertiary/10 rounded-xl w-full p-4 flex items-center justify-between gap-4">
-        {/*File Info*/}
-        <div className="flex items-center gap-2 min-w-0">
-          <FaFile className="text-textSecondary text-3xl shrink-0" />
-          <div className="flex flex-col gap-1 min-w-0">
-            <div className="text-sm font-semibold text-textSecondary truncate">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.2 }}
+      className="glass px-4 py-3 flex flex-col gap-2.5"
+    >
+      {/* Top row: file info + actions */}
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        {/* File info */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* Extension badge */}
+          <div className="h-9 w-9 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0">
+            <span className={`text-[10px] font-bold ${typeColor}`}>{ext}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-textPrimary font-medium truncate">
               {fileInfo.name}
-            </div>
-            <div className="text-xs text-textTertiary font-light">
-              {setFileSize(fileInfo.size)}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-textTertiary">
+                {setFileSize(fileInfo.size)}
+              </span>
+              <span className="text-[11px] text-textTertiary">•</span>
+              <span className={`text-[11px] font-medium ${typeColor}`}>
+                {typeLabel}
+              </span>
+              {fileInfo.current === "PAUSED" && fileInfo.pausedBy === "peer" && (
+                <>
+                  <span className="text-[11px] text-textTertiary">•</span>
+                  <span className="text-[11px] text-textTertiary italic">
+                    Paused by peer
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/*Progress*/}
-        <TransferProgressComponent
-          percentage={parseFloat(progress.toFixed(2))}
-          current={fileInfo.current}
-        />
-      </div>
-
-      {/*Transfer Controls*/}
-      <div className="rounded-2xl bg-bgTertiary/10 px-3 py-2 flex gap-2">
-        {fileInfo.current !== "WAITING_FOR_DATACHANNEL" && fileInfo.current !== "WAITING_FOR_RESPONSE" && (
-          fileInfo.pausedBy === "peer" ? (
-            <span className="rounded-lg bg-bgSecondary border-2 border-bgTertiary text-textTertiary font-semibold px-2 py-1 text-xs opacity-60">
-              Paused by peer
-            </span>
-          ) : (
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {fileInfo.current === "IN_PROGRESS" && (
             <button
-              onClick={() => {
-                setIsPaused(!isPaused);
-                if (isPaused) {
-                  onResume(fileInfo.id!);
-                } else {
-                  onPause(fileInfo.id!);
-                }
-              }}
-              className="rounded-lg bg-bgSecondary border-2 cursor-pointer border-bgTertiary text-textTertiary font-semibold px-2 py-1 f-c-row gap-1"
+              onClick={() => onPause(fileInfo.id!)}
+              className="p-1.5 rounded-md hover:bg-white/[0.06] text-textSecondary hover:text-white transition-all cursor-pointer"
+              title="Pause"
             >
-              {isPaused ? <FaPlay /> : <FaPause />}
-              {isPaused ? "Resume" : "Pause"}
+              <FiPause size={14} />
             </button>
-          )
-        )}
-
-        <button
-          onClick={() => onCancel(fileInfo.id!)}
-          className="bg-linear-to-b from-error to-error/50 text-textPrimary rounded-lg text-sm px-3 py-2 font-semibold cursor-pointer"
-        >
-          Cancel
-        </button>
+          )}
+          {fileInfo.current === "PAUSED" && fileInfo.pausedBy !== "peer" && (
+            <button
+              onClick={() => onResume(fileInfo.id!)}
+              className="p-1.5 rounded-md hover:bg-white/[0.06] text-textSecondary hover:text-white transition-all cursor-pointer"
+              title="Resume"
+            >
+              <FiPlay size={14} />
+            </button>
+          )}
+          <button
+            onClick={() => onCancel(fileInfo.id!)}
+            className="p-1.5 rounded-md hover:bg-error/10 text-textTertiary hover:text-error transition-all cursor-pointer"
+            title="Cancel"
+          >
+            <FiX size={14} />
+          </button>
+        </div>
       </div>
-    </div>
+
+      {/* Progress bar */}
+      <TransferProgressComponent percentage={percentage} current={fileInfo.current} />
+    </motion.div>
   );
 }

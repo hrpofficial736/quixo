@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Header from "./Header";
 import ConnectionWindow from "./ConnectionWindow";
-import { poppins } from "../fonts";
+import { inter } from "../fonts";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/useUserStore";
 import { useConnectionStatusStore } from "@/stores/useConnectionStatusStore";
@@ -30,9 +30,16 @@ export default function LandingPage() {
   if (!socket || !socket.OPEN) return <LoadingPage />
 
   return (
-    <div className={`w-screen h-screen bg-bgPrimary ${poppins.className}`}>
+    <div className={`w-screen min-h-screen bg-bgPrimary ${inter.className}`}>
+      {/* Backdrop overlay */}
+      {isConnectionWindowOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+          onClick={handleToggleConnectionWindow}
+        />
+      )}
       <div
-        className={`w-full h-full ${isConnectionWindowOpen ? "blur-xl" : "blur-none"}`}
+        className={`transition-all duration-300 ${isConnectionWindowOpen ? "blur-sm scale-[0.99]" : ""}`}
       >
         <Header onTrigger={handleToggleConnectionWindow} />
       </div>

@@ -6,6 +6,7 @@ import {
   TransferInterface,
 } from "@/types/fileTransferInterfaces";
 import { RefObject } from "react";
+import toast from "react-hot-toast";
 
 export function useTransferActions(
     controlDatachannel: RTCDataChannel | null,
@@ -40,6 +41,8 @@ export function useTransferActions(
     const handleCancelTransfer = (id: string) => {
         if (!controlDatachannel) return;
         transfersRef.current.delete(id);
+
+        setTransfers((prev) => prev.filter((t) => t.id !== id));
     
         sendExtraInfo(controlDatachannel, {
           eventName: EVENTS.FILE_TRANSFER_CANCELLED,
@@ -52,6 +55,8 @@ export function useTransferActions(
           abortControllers.current.delete(id);
         }
         closeFileDataChannel(id);
+
+        toast.error("File transfer cancelled!");
     };
     
     const handleSelectFilesAndSendTransferRequest = (e: React.ChangeEvent<HTMLInputElement>, pc: RTCPeerConnection | null) => {
