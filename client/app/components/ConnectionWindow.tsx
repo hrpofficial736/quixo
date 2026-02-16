@@ -70,7 +70,7 @@ export default function ConnectionWindow({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="fixed z-40 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md mx-4"
+          className="fixed z-40 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md max-md:px-4"
         >
           <div className="bg-bgSecondary border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden">
             {/* Header */}
