@@ -6,6 +6,7 @@ import { SocketProvider } from "@/context/SocketContext";
 export const metadata: Metadata = {
   title: "Quixo",
   description: "A simple file transfer app!",
+  icons: ["logo.svg"]
 };
 
 export default function RootLayout({
